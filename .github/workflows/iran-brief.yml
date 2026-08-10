@@ -46,13 +46,17 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           REVIEWER_EMAIL: ${{ secrets.REVIEWER_EMAIL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          # Pass the model override through only when the repo variable is set, so an
-          # unset/empty variable does not shadow digest.py's built-in default.
+          # These two are passed through only when set, so an unset/empty value does not
+          # shadow the code's built-in default (SMTP_PORT -> 587, model -> claude-sonnet-5).
+          # An empty SMTP_PORT would otherwise reach int("") in deliver.py and crash.
+          SMTP_PORT_VAR: ${{ secrets.SMTP_PORT }}
           IRAN_BRIEF_MODEL_VAR: ${{ vars.IRAN_BRIEF_MODEL }}
         run: |
+          if [ -n "${SMTP_PORT_VAR}" ]; then
+            export SMTP_PORT="${SMTP_PORT_VAR}"
+          fi
           if [ -n "${IRAN_BRIEF_MODEL_VAR}" ]; then
             export IRAN_BRIEF_MODEL="${IRAN_BRIEF_MODEL_VAR}"
           fi
