@@ -107,11 +107,15 @@ tool redrafts, escalating to a stronger model. Softer issues (an unusual item co
 sending.
 
 **Step 2c — Finish the layout.** After validation, the tool guarantees every country
-header is present in the standard order, so a quiet country reads "No developments reported."
+header is present in the standard order, so a quiet section reads "Nothing to Report."
 instead of silently disappearing (the reader can always tell "nothing happened" from
-"we missed it"). It then appends a short **"Dates ahead"** section listing upcoming
-anniversaries and deadlines that fall in the next few weeks. That list is hand-maintained,
-not generated, so the brief never invents a date.
+"we missed it"). It then appends three short closing sections, each built straight from its
+source rather than written by the model (so the brief can't invent a bill, a date, or a
+historical event): **"U.S. Congress"** (recent Iran-related bills and resolutions),
+**"This day in history"** (notable events on today's date in past years), and
+**"Dates ahead"** (upcoming anniversaries and deadlines in the next few weeks). The
+history and dates lists are hand-maintained; the Congress list is pulled live from the
+official Library of Congress feed.
 
 **Step 3 — Render.** The drafted brief is converted from plain text into a tidy HTML email
 that mirrors the tracker's familiar look: bold category headers, bulleted items, indented
@@ -129,8 +133,10 @@ The tool is not writing freely. It follows an explicit style specification (the 
 `Iran War Update — Formatter Prompt.md` in the repository). The key rules:
 
 - **Categories, in this fixed order, always shown**: US, Iran, Lebanon, Israel,
-  Yemen / Saudi Arabia, Oman, Iraq, Egypt, Jordan, Syria, Caspian Sea, General. A country
-  with no news that day shows "No developments reported." rather than being dropped.
+  Saudi Arabia/Yemen/Iraq, General — the same six the human tracker uses, with the Gulf/Iraq
+  theater combined into one header and other countries (Oman, Egypt, Jordan, Syria) folded
+  into General. A section with no news that day shows "Nothing to Report." rather than being
+  dropped.
 - **One bullet per item**, phrased as "On [Weekday], [actor] [verb] [what happened]."
 - **The source link sits on the reporting verb** (for example, the word "said" or "reported"
   becomes the hyperlink).
@@ -144,8 +150,11 @@ The tool is not writing freely. It follows an explicit style specification (the 
   everything it found. Opinion pieces, explainers, and trivia are dropped.
 - **Mechanics:** U.S. and U.K. keep their periods, percentages are spelled out ("42 percent"),
   the serial comma is used, specific figures are given as numerals, and em-dashes are avoided.
-- **Dates ahead.** The brief ends with a short curated list of upcoming anniversaries and
-  deadlines (see [Section 6](#6-where-the-news-comes-from) for how to edit it).
+- **Closing sections.** The brief ends with three short reference sections built from source,
+  not written by the model: **U.S. Congress** (recent Iran-related bills), **This day in
+  history** (events on today's date in past years), and **Dates ahead** (upcoming
+  anniversaries and deadlines). See [Section 6](#6-where-the-news-comes-from) for how to edit
+  the hand-maintained lists.
 
 Because the style lives in a written spec, it can be adjusted deliberately, and every change is
 applied consistently from the next run onward.
@@ -175,6 +184,10 @@ The tool uses free, public, keyless sources, so there are no paid subscriptions 
   particular tweet, a Truth Social post, a YouTube clip — can still be added by hand: paste a
   few `{source, title, link}` entries into `pipeline/data/manual.json` and the next run folds
   them in.
+- **U.S. Congress (official Library of Congress feed).** For the "U.S. Congress" section, the
+  tool queries the government's own legislative feed (api.congress.gov) for recent bills whose
+  title concerns Iran, and links each to its congress.gov page. This needs a free key (see
+  [Section 11](#11-administrator-setup-one-time)); without one, the section is simply omitted.
 
 A keyword filter (Iran, Tehran, Hormuz, Houthi, IRGC, Hezbollah, Lebanon, Israel, IDF, Yemen,
 Saudi, Iraq, Syria, Jordan, Egypt, Caspian, tanker, strait, nuclear, and others) keeps the
@@ -184,6 +197,11 @@ mixed-topic feeds on-beat.
 `pipeline/calendar_data.py`. To add an anniversary or a deadline, add one line to that file
 (a month, day, and label); it will appear automatically when the date is within about six
 weeks. Keeping it by hand is deliberate, so the brief never fabricates a date.
+
+**Editing the "This day in history" list.** The historical notes live the same way in
+`pipeline/history_data.py`, keyed by month and day. Add a line under a date and it shows on
+that calendar day each year. Also hand-maintained on purpose, so the brief never invents
+history.
 
 All of these can be changed. Adding an outlet, adjusting a search, or broadening the beat is a
 quick configuration change (see [Section 16](#16-requesting-changes)).
@@ -267,6 +285,7 @@ the Outlook/Microsoft Graph set (see Step 1b).
 | Secret | Required? | What it is |
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | Required | The Claude API key that powers the drafting step. Without it the run cannot draft. |
+| `CONGRESS_API_KEY` | Optional | Free key from [api.congress.gov](https://api.congress.gov/sign-up/) that powers the "U.S. Congress" section. Unset simply omits that section. |
 | `GMAIL_USER` | Gmail delivery | The Gmail address the draft is sent from. |
 | `GMAIL_APP_PASS` | Gmail delivery | A Gmail **app password** (not the account password). |
 | `DIGEST_TO` | Gmail delivery | Recipient(s) of the draft; comma-separated for more than one. |

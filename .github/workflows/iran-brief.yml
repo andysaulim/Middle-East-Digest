@@ -44,6 +44,9 @@ jobs:
       - name: Run pipeline
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Optional: powers the "U.S. Congress" section (free key at api.congress.gov).
+          # Unset -> the section is simply omitted.
+          CONGRESS_API_KEY: ${{ secrets.CONGRESS_API_KEY }}
           # Gmail delivery (same secret names as the Korea/Japan digests).
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}

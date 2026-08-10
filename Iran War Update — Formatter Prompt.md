@@ -18,21 +18,20 @@ last 24 hours. Many are duplicate reports of the same event from different outle
    developments. Never omit an active region (Lebanon, Yemen, etc.) just because most of the
    day's volume is about one story. (On Mondays the input covers the whole weekend —
    Saturday, Sunday, and Monday morning — so expect more items.)
-3. **Categorize** each into exactly these headers, **always including every header in this
+3. **Categorize** each into exactly these six headers, **always including every header in this
    order, even when a header has no news**. For a header with no development today, write
-   the header and a single bullet: `- No developments reported.` Never drop a header.
+   the header and a single bullet: `- Nothing to Report.` Never drop a header.
    - US
    - Iran
    - Lebanon
    - Israel
-   - Yemen / Saudi Arabia
-   - Oman
-   - Iraq
-   - Egypt
-   - Jordan
-   - Syria
-   - Caspian Sea
+   - Saudi Arabia/Yemen/Iraq
    - General
+
+   `Saudi Arabia/Yemen/Iraq` is one combined header for the whole Gulf/Iraq theater (Houthi
+   and Red Sea attacks, Saudi Arabia, Yemen, Iraqi militias). Developments elsewhere in the
+   region that do not fit a country header (Oman, Egypt, Jordan, Syria, and the like) go
+   under General.
 4. **Write** each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
    - Put the source hyperlink on the reporting verb, Markdown style: `[said](url)`.
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never

@@ -12,7 +12,7 @@ regenerated — escalating from the fast model to a stronger one, mirroring the
 Korea/Japan digests' validate-and-regenerate guardrail.
 
 After validation, every standard country header is guaranteed present (a country with no
-news shows "No developments reported." rather than vanishing), and a curated "Dates ahead"
+news shows "Nothing to Report." rather than vanishing), and a curated "Dates ahead"
 section is appended from calendar_data.py.
 
 System prompt below is the machine version of `Iran War Update — Formatter Prompt.md`;
@@ -35,6 +35,8 @@ from pathlib import Path
 
 import validate
 import calendar_data
+import congress
+import history_data
 
 DATA_DIR = Path(__file__).parent / "data"
 OUT_DIR = Path(__file__).parent / "out"
@@ -46,20 +48,28 @@ PRIMARY_MODEL = os.environ.get("IRAN_BRIEF_PRIMARY_MODEL", "claude-opus-4-8")
 MAX_ATTEMPTS = 3       # 1 fast attempt + up to 2 escalated retries
 MAX_CANDIDATES = 300   # cap items sent to the model (interleaved across topics first)
 
-# Every country header, always shown in this order (matches the human tracker). A header
-# with no development today is filled with a "No developments reported." placeholder.
+# Section headers, in the order the human tracker uses them. The Gulf/Iraq theater is one
+# combined header; countries that appear only occasionally (Oman, Egypt, Jordan, Syria, the
+# Caspian) are not standing headers — their items flow into the combined header or General
+# via _ALIASES below, matching the real product.
 CATEGORIES = [
-    "US", "Iran", "Lebanon", "Israel", "Yemen / Saudi Arabia", "Oman",
-    "Iraq", "Egypt", "Jordan", "Syria", "Caspian Sea", "General",
+    "US", "Iran", "Lebanon", "Israel", "Saudi Arabia/Yemen/Iraq", "General",
 ]
-NO_NEWS = "- No developments reported."
+NO_NEWS = "- Nothing to Report."
 
-# Aliases the model might emit, mapped to the canonical header.
+_GULF = "Saudi Arabia/Yemen/Iraq"
+# Aliases the model might emit, mapped to the canonical header. Anything unrecognized falls
+# to General (see ensure_sections), so no real item is ever dropped.
 _ALIASES = {
     "unitedstates": "US", "usa": "US",
-    "yemensaudiarabia": "Yemen / Saudi Arabia", "yemen": "Yemen / Saudi Arabia",
-    "saudiarabia": "Yemen / Saudi Arabia", "saudi": "Yemen / Saudi Arabia",
-    "caspian": "Caspian Sea",
+    # the combined Gulf/Iraq theater, however the model splits or spells it
+    "saudiarabiayemeniraq": _GULF, "yemensaudiarabiairaq": _GULF,
+    "yemensaudiarabia": _GULF, "saudiarabiayemen": _GULF,
+    "yemen": _GULF, "saudiarabia": _GULF, "saudi": _GULF, "iraq": _GULF,
+    "gulf": _GULF, "redsea": _GULF,
+    # occasional countries fold into General
+    "oman": "General", "egypt": "General", "jordan": "General",
+    "syria": "General", "caspian": "General", "caspiansea": "General",
 }
 
 SYSTEM_PROMPT = """\
@@ -74,12 +84,14 @@ Produce the day's brief. Steps:
    trivia. Be COMPREHENSIVE: aim for roughly 15-40 real items across the whole brief, and
    cover every region that has real developments. Never omit an active region (Lebanon,
    Yemen, etc.) just because most of the day's volume is about one story (e.g. Hormuz).
-3. CATEGORIZE into exactly these headers, ALWAYS including EVERY header in this exact
+3. CATEGORIZE into exactly these six headers, ALWAYS including EVERY header in this exact
    order, even when a header has no news:
-   US, Iran, Lebanon, Israel, Yemen / Saudi Arabia, Oman, Iraq, Egypt, Jordan, Syria,
-   Caspian Sea, General.
-   For a header with no genuine development today, write the header followed by a single
-   bullet exactly: "- No developments reported." Do not drop any header.
+   US, Iran, Lebanon, Israel, Saudi Arabia/Yemen/Iraq, General.
+   "Saudi Arabia/Yemen/Iraq" is one combined header covering the whole Gulf/Iraq theater
+   (Houthi and Red Sea attacks, Saudi Arabia, Yemen, Iraqi militias). Developments in Oman,
+   Egypt, Jordan, Syria, or elsewhere in the region that do not fit a country header go under
+   General. For a header with no genuine development today, write the header followed by a
+   single bullet exactly: "- Nothing to Report." Do not drop any header.
 4. WRITE each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
    - Put the source hyperlink on the reporting verb, Markdown style: [said](url).
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
@@ -136,7 +148,7 @@ def _header_name(line):
 
 def ensure_sections(brief_md):
     """Guarantee every standard header is present, in canonical order, filling any header
-    that has no items with the "No developments reported." placeholder.
+    that has no items with the "Nothing to Report." placeholder.
 
     Reorders the model's sections into CATEGORIES order. Content under an unrecognized
     header flows into General rather than being dropped, so no real item is lost."""
@@ -254,11 +266,17 @@ def build_brief():
             )
 
     # Guarantee every country header is present (no-news countries show a placeholder),
-    # then append the curated "Dates ahead" section.
+    # then append the deterministic tail sections (rendered from source, never the model,
+    # so the brief can't invent a bill, a date, or a historical event): U.S. Congress, then
+    # "This day in history," then the curated "Dates ahead."
     brief_md = ensure_sections(brief_md)
-    dates = calendar_data.render_section(today.date())
-    if dates:
-        brief_md = f"{brief_md}\n\n{dates}"
+    for extra in (
+        congress.render_section(),
+        history_data.render_section(today.date()),
+        calendar_data.render_section(today.date()),
+    ):
+        if extra:
+            brief_md = f"{brief_md}\n\n{extra}"
 
     out_path = OUT_DIR / f"brief_{today.strftime('%Y-%m-%d')}.md"
     out_path.write_text(brief_md, encoding="utf-8")

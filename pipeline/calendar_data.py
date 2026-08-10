@@ -30,17 +30,24 @@ from datetime import date, timedelta
 DATES = [
     # (month, day, label, recurring)
     (1, 3, "Anniversary of the 2020 U.S. strike that killed Qassem Soleimani in Baghdad.", True),
+    (1, 20, "Anniversary of the 1981 release of the 52 U.S. embassy hostages after 444 days.", True),
+    (2, 11, "Anniversary of the 1979 Islamic Revolution; large state rallies are held across Iran.", True),
     (3, 20, "Nowruz, the Iranian New Year.", True),
     (4, 1, "Islamic Republic Day in Iran.", True),
+    (5, 8, "Anniversary of the 2018 U.S. withdrawal from the JCPOA.", True),
     (6, 13, "Anniversary of the June 2025 Israel-Iran war.", True),
     (7, 14, "Anniversary of the 2015 signing of the JCPOA (Iran nuclear deal).", True),
+    (9, 22, "Anniversary of the 1980 start of the Iran-Iraq War.", True),
     (11, 4, "Anniversary of the 1979 seizure of the U.S. embassy in Tehran.", True),
 ]
 
 # One-off dates with an explicit year live here (auto-expire once past).
 # Format: (year, month, day, "label")
+# IAEA Board of Governors meets roughly quarterly (Mar, Jun, Sep, Nov) but the exact dates
+# shift each year — add each session here with its real dates rather than as a recurring entry.
 ONE_OFFS = [
-    # (2026, 9, 15, "U.N. General Assembly high-level week opens in New York."),
+    (2026, 9, 22, "U.N. General Assembly general debate opens in New York (heads-of-state week)."),
+    # (2026, 11, 20, "IAEA Board of Governors quarterly meeting begins in Vienna."),
 ]
 
 
