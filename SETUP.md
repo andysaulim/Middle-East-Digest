@@ -66,6 +66,36 @@ Actions; no server to maintain.
    - `IRAN_BRIEF_MODEL` — the Claude model to use. Leave unset for the sensible default.
 3. **That's it.** The schedule (weekday mornings) is already built in.
 
+### What the SMTP settings are
+
+The four `SMTP_*` values plus `REVIEWER_EMAIL` describe the mailbox the draft is sent
+*from* and who it goes *to*. "SMTP" is just the standard protocol email programs use to
+send mail; the tool logs into an account and uses it to send the morning draft.
+
+| Secret | What it is | Typical value |
+| --- | --- | --- |
+| `SMTP_HOST` | Address of the outgoing mail server | `smtp.office365.com` (Microsoft 365) / `smtp.gmail.com` (Google) |
+| `SMTP_PORT` | Network port for that server (optional; defaults to `587`) | `587` |
+| `SMTP_USER` | The full email address you send from — also the login username | `iran-brief@csis.org` |
+| `SMTP_PASS` | The password for that account — usually an **app password**, not the normal login password | a provider-generated app password |
+| `REVIEWER_EMAIL` | Where the draft is delivered (the "To" address) | the reviewer's inbox |
+
+Notes:
+
+- Use a **dedicated or shared mailbox** if you can, not a personal account — it keeps the
+  "From" line clean and avoids putting a personal password into repo secrets.
+- Most providers require an **app password** here rather than the everyday password,
+  especially when the account uses multi-factor authentication. App passwords are scoped to
+  sending mail and can be revoked anytime without changing the real password.
+- **Microsoft 365** (`smtp.office365.com`, port `587`): IT may need to enable "SMTP AUTH"
+  for that specific mailbox, since Microsoft disables it by default.
+- **Google Workspace / Gmail** (`smtp.gmail.com`, port `587`): create an app password at
+  <https://myaccount.google.com/apppasswords>; the regular password will be rejected.
+- **Prefer not to set up email yet?** Leave all four `SMTP_*` values (and `REVIEWER_EMAIL`)
+  unset. The tool still builds and archives the brief and keeps it as a downloadable
+  artifact on each run; it simply won't email it, and someone opens the artifact and sends
+  it manually.
+
 Once the secrets are in, you can confirm it works without waiting for the morning run:
 open the **Actions** tab, choose the **Iran War Update** workflow, and click **Run
 workflow**. The draft email should arrive at `REVIEWER_EMAIL`, and the completed run also
