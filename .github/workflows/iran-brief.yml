@@ -44,21 +44,31 @@ jobs:
       - name: Run pipeline
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Gmail delivery (same secret names as the Korea/Japan digests).
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+          GMAIL_FROM: ${{ secrets.GMAIL_FROM }}
+          DIGEST_TO: ${{ secrets.DIGEST_TO }}
+          # Generic SMTP delivery (original Iran config; used only if Gmail is unset).
           REVIEWER_EMAIL: ${{ secrets.REVIEWER_EMAIL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
-          # These two are passed through only when set, so an unset/empty value does not
-          # shadow the code's built-in default (SMTP_PORT -> 587, model -> claude-sonnet-5).
+          # These are passed through only when set, so an unset/empty value does not shadow
+          # the code's built-in default (SMTP_PORT -> 587, models -> the digest.py defaults).
           # An empty SMTP_PORT would otherwise reach int("") in deliver.py and crash.
           SMTP_PORT_VAR: ${{ secrets.SMTP_PORT }}
           IRAN_BRIEF_MODEL_VAR: ${{ vars.IRAN_BRIEF_MODEL }}
+          IRAN_BRIEF_PRIMARY_MODEL_VAR: ${{ vars.IRAN_BRIEF_PRIMARY_MODEL }}
         run: |
           if [ -n "${SMTP_PORT_VAR}" ]; then
             export SMTP_PORT="${SMTP_PORT_VAR}"
           fi
           if [ -n "${IRAN_BRIEF_MODEL_VAR}" ]; then
             export IRAN_BRIEF_MODEL="${IRAN_BRIEF_MODEL_VAR}"
+          fi
+          if [ -n "${IRAN_BRIEF_PRIMARY_MODEL_VAR}" ]; then
+            export IRAN_BRIEF_PRIMARY_MODEL="${IRAN_BRIEF_PRIMARY_MODEL_VAR}"
           fi
           python run.py
 

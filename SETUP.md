@@ -88,7 +88,17 @@ articles that describe the same event, decides what is significant enough to inc
 each item into the correct regional header, writes it in the house one-bullet format, links
 the source on the reporting verb, and flags anything that rests on a single source. The model
 is instructed to use only the article links actually present in the day's list and never to
-invent a link or an event.
+invent a link or an event. It is also told to prefer strong outlets (the Wall Street Journal,
+New York Times, Financial Times, Reuters, the Associated Press, Bloomberg, the Economist, the
+Washington Post, or a recognized specialist) when they reported a story.
+
+**Step 2b — Validate (the failsafe).** Before the draft goes any further, the tool checks it,
+mirroring the guardrails used on the Korea and Japan digests. It rejects a truncated or empty
+brief, and it enforces "source-or-skip" mechanically: every linked article must trace back to
+the day's collected input, so the tool cannot ship an invented link. If a check fails, the
+tool redrafts, escalating to a stronger model. Softer issues (an unusual item count, the word
+"claim," no strong outlet in the day's input) are logged for the reviewer but do not block
+sending.
 
 **Step 3 — Render.** The drafted brief is converted from plain text into a tidy HTML email
 that mirrors the tracker's familiar look: bold category headers, bulleted items, indented
@@ -203,18 +213,30 @@ of saved values.
 **Step 1 — Add repository secrets.** In the repository, go to Settings, then Secrets and
 variables, then Actions, then the Secrets tab, and add:
 
+`ANTHROPIC_API_KEY` is always required. For delivery, use **either** the Gmail set (the same
+secrets as the Korea and Japan digests — recommended if you already run those) **or** the
+generic-SMTP set.
+
 | Secret | Required? | What it is |
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | Required | The Claude API key that powers the drafting step. Without it the run cannot draft. |
-| `REVIEWER_EMAIL` | For email delivery | Where the morning draft is sent. |
-| `SMTP_HOST` | For email delivery | The outgoing mail server. |
+| `GMAIL_USER` | Gmail delivery | The Gmail address the draft is sent from. |
+| `GMAIL_APP_PASS` | Gmail delivery | A Gmail **app password** (not the account password). |
+| `DIGEST_TO` | Gmail delivery | Recipient(s) of the draft; comma-separated for more than one. |
+| `GMAIL_FROM` | Optional | Overrides the "From" alias; defaults to `GMAIL_USER`. |
+| `REVIEWER_EMAIL` | Generic SMTP | Where the draft is sent (if not using Gmail/`DIGEST_TO`). |
+| `SMTP_HOST` | Generic SMTP | The outgoing mail server. |
 | `SMTP_PORT` | Optional | The mail server port. Leave unset to use the standard default (587). |
-| `SMTP_USER` | For email delivery | The email address the draft is sent from, and the login name. |
-| `SMTP_PASS` | For email delivery | The password for that account, usually an app password. |
+| `SMTP_USER` | Generic SMTP | The email address the draft is sent from, and the login name. |
+| `SMTP_PASS` | Generic SMTP | The password for that account, usually an app password. |
 
-**Step 2 — Optional variable.** In the same place, on the Variables tab, you may set
-`IRAN_BRIEF_MODEL` to choose which Claude model to use. Leave it unset for the sensible
-default. (Note this is a Variable, not a Secret; they are separate tabs.)
+If both sets are present, Gmail is used. If neither is, the run still builds and archives the
+brief and keeps it as a downloadable artifact; it just does not email it.
+
+**Step 2 — Optional variables.** On the Variables tab, you may set `IRAN_BRIEF_MODEL` (the
+fast first-attempt model) and `IRAN_BRIEF_PRIMARY_MODEL` (the stronger model used on a
+validation retry). Leave them unset for sensible defaults. (These are Variables, not Secrets;
+separate tabs.)
 
 **Step 3 — That is it.** The weekday-morning schedule is already built into the tool.
 
