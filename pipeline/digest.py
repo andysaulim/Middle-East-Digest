@@ -87,7 +87,17 @@ def build_brief():
                         f"as JSON:\n\n{json.dumps(slim, ensure_ascii=False)}"),
         }],
     )
-    brief_md = msg.content[0].text.strip()
+    # The model may emit a thinking block before the answer, so content[0] is not
+    # necessarily the text. Concatenate every text block and ignore the rest.
+    brief_md = "".join(
+        getattr(block, "text", "") for block in msg.content
+        if getattr(block, "type", None) == "text"
+    ).strip()
+    if not brief_md:
+        raise RuntimeError(
+            f"No text block in model response (blocks: "
+            f"{[getattr(b, 'type', '?') for b in msg.content]})"
+        )
 
     out_path = OUT_DIR / f"brief_{today.strftime('%Y-%m-%d')}.md"
     out_path.write_text(brief_md, encoding="utf-8")
