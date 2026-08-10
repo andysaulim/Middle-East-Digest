@@ -23,6 +23,10 @@ Daily Brief design, adapted to the Iran/Middle East beat.
 │   └── data/          SQLite archive + dated JSON snapshots
 ```
 
+**Sharing with the program team?** [`SETUP.md`](SETUP.md) is a plain-language guide — what
+arrives each morning, the reviewer's role, and the one-time administrator setup — written to
+be read by non-developers.
+
 The detailed pipeline docs, configuration knobs, and honest v1 constraints live in
 [`pipeline/README.md`](pipeline/README.md). The house-style formatting rules live in
 [`Iran War Update — Formatter Prompt.md`](Iran%20War%20Update%20%E2%80%94%20Formatter%20Prompt.md)
