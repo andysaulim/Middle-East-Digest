@@ -25,7 +25,7 @@ import re
 # Thresholds
 MIN_CHARS = 400            # below this the brief is almost certainly truncated
 MIN_ITEMS_CRITICAL = 3     # fewer top-level bullets than this = incomplete
-TARGET_MIN, TARGET_MAX = 12, 25
+TARGET_MIN, TARGET_MAX = 15, 40   # house target; outside this is a (non-blocking) warning
 
 # Strong outlets we want represented when they reported a development. Matched
 # (case-insensitively) against each item's `source` name.
@@ -53,6 +53,29 @@ def prestige_count(items):
         if any(p in source for p in PRESTIGE):
             n += 1
     return n
+
+
+def repair_brief(brief_md, items):
+    """Drop top-level bullets whose links are not in the input, keeping the rest.
+
+    Used as a last resort after regeneration is exhausted: it upholds SOURCE-OR-SKIP
+    (no fabricated links ship) without failing the whole brief over one bad bullet.
+    A dropped bullet takes its indented sub-bullets with it.
+    """
+    allowed = {(it.get("url") or "").strip() for it in items}
+    lines = (brief_md or "").splitlines()
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        if _TOP_BULLET_RE.match(line) and any(u not in allowed for u in extract_urls(line)):
+            i += 1
+            # skip this bullet's indented sub-bullets
+            while i < len(lines) and lines[i][:1] in (" ", "\t"):
+                i += 1
+            continue
+        out.append(line)
+        i += 1
+    return "\n".join(out).strip()
 
 
 def validate_brief(brief_md, items):
@@ -131,5 +154,18 @@ if __name__ == "__main__":
     no_header = "US\n- On Monday, the US [said](https://example.com/a) x.\n" * 5
     crit, warn = validate_brief(no_header, good_items)
     assert any("header" in c for c in crit), crit
+
+    # repair drops only the bullet(s) with unknown links, keeps the rest
+    mixed = (
+        "**Some updates on the Iran war (8/10):**\n"
+        "- On Monday, the US [said](https://example.com/a) a real thing.\n"
+        "- On Monday, X [said](https://fake.example/z) a fabricated thing.\n"
+        "  - a sub-bullet under the bad item\n"
+        "- On Tuesday, Y [reported](https://example.com/b) another real thing.\n"
+    )
+    repaired = repair_brief(mixed, good_items)
+    assert "fake.example" not in repaired, repaired
+    assert "sub-bullet under the bad item" not in repaired, repaired
+    assert "example.com/a" in repaired and "example.com/b" in repaired, repaired
 
     print("validate.py self-test passed")

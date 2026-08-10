@@ -40,6 +40,12 @@ GOOGLE_NEWS_QUERIES = [
     "Iran nuclear IRGC",
     "Yemen Saudi Arabia Houthi",
     "Iran Oman Hormuz deal",
+    # Broaden coverage of the regions the brief was thin on:
+    "Lebanon Israeli strike UNIFIL casualties",
+    "Yemen Houthi Marib Hadramout attack",
+    "Strait of Hormuz shipping UKMTO transit toll",
+    "Iran Araghchi Gulf states warning",
+    "Pezeshkian Iran statement",
 ]
 
 # Direct outlet feeds (mixed-topic; filtered by KEYWORDS below).

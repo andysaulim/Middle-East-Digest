@@ -13,8 +13,10 @@ last 24 hours. Many are duplicate reports of the same event from different outle
 ## Steps
 
 1. **Cluster** items that describe the same event.
-2. **Select** the genuinely significant developments. Drop opinion pieces, explainers, and
-   trivia. Aim for 12–25 items across the whole brief, not everything.
+2. **Select** the genuinely significant developments. Drop opinion, explainers, and trivia,
+   but be comprehensive: aim for roughly 15–40 items and cover every region that has real
+   developments. Never omit an active region (Lebanon, Yemen, etc.) just because most of the
+   day's volume is about one story.
 3. **Categorize** each into exactly these headers, in this order (omit an empty header):
    - US
    - Iran
@@ -27,7 +29,8 @@ last 24 hours. Many are duplicate reports of the same event from different outle
    - Put the source hyperlink on the reporting verb, Markdown style: `[said](url)`.
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
      use "claim" to imply doubt.
-   - Add an indented sub-bullet for a quote or a follow-on detail when warranted.
+   - Add an indented sub-bullet for a direct quote, a casualty or transit figure, or a
+     load-bearing follow-on detail. Keep specific numbers.
 5. **Sourcing:** if a cluster has two or more independent outlets, it is corroborated; pick
    the strongest source for the link. If an item rests on a single source and is
    load-bearing (a death toll, a strike, an official position), append ` [single-source]`.
@@ -66,5 +69,8 @@ mechanically enforced, not just requested:
   that wasn't in the input is treated as a fabrication and fails the brief.
 - **Header** — the brief must open with the house header line.
 
-Warnings (item count outside 12–25, use of "claim", no prestige outlet in the day's input)
+If retries are exhausted, the tool repairs the last draft by dropping only the bullets whose
+links are unverifiable (rather than failing the whole run), then ships the rest.
+
+Warnings (item count outside 15–40, use of "claim", no prestige outlet in the day's input)
 are logged for the reviewer but do not block delivery.
