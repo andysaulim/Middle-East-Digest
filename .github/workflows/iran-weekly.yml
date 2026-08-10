@@ -1,0 +1,71 @@
+name: Iran War Update — Weekly
+
+# Friday "Week in Review": reads the committed SQLite archive (built up by the daily job),
+# has Claude synthesize the week's arc plus factual tallies, and emails the draft. Read-only
+# on the archive, so it does not commit anything back.
+
+on:
+  schedule:
+    # 21:00 UTC Fridays = 5:00 PM ET during EDT (4:00 PM during EST).
+    - cron: "0 21 * * 5"
+  workflow_dispatch:
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pipeline
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run weekly rollup
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Gmail delivery (same secret names as the daily brief).
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+          GMAIL_FROM: ${{ secrets.GMAIL_FROM }}
+          DIGEST_TO: ${{ secrets.DIGEST_TO }}
+          # Generic SMTP fallback (used only if Gmail is unset).
+          REVIEWER_EMAIL: ${{ secrets.REVIEWER_EMAIL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          # Optional Outlook (Microsoft Graph) draft delivery; used only when all are set.
+          MS_TENANT_ID: ${{ secrets.MS_TENANT_ID }}
+          MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
+          MS_CLIENT_SECRET: ${{ secrets.MS_CLIENT_SECRET }}
+          MS_MAILBOX: ${{ secrets.MS_MAILBOX }}
+          SMTP_PORT_VAR: ${{ secrets.SMTP_PORT }}
+          IRAN_BRIEF_PRIMARY_MODEL_VAR: ${{ vars.IRAN_BRIEF_PRIMARY_MODEL }}
+        run: |
+          if [ -n "${SMTP_PORT_VAR}" ]; then
+            export SMTP_PORT="${SMTP_PORT_VAR}"
+          fi
+          if [ -n "${IRAN_BRIEF_PRIMARY_MODEL_VAR}" ]; then
+            export IRAN_BRIEF_PRIMARY_MODEL="${IRAN_BRIEF_PRIMARY_MODEL_VAR}"
+          fi
+          python weekly.py
+
+      - name: Upload weekly review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iran-weekly
+          path: |
+            pipeline/out/weekly_*.md
+            pipeline/out/weekly_*.html
+          if-no-files-found: warn

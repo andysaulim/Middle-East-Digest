@@ -54,6 +54,11 @@ jobs:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          # Optional Outlook (Microsoft Graph) draft delivery; used only when all four are set.
+          MS_TENANT_ID: ${{ secrets.MS_TENANT_ID }}
+          MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
+          MS_CLIENT_SECRET: ${{ secrets.MS_CLIENT_SECRET }}
+          MS_MAILBOX: ${{ secrets.MS_MAILBOX }}
           # These are passed through only when set, so an unset/empty value does not shadow
           # the code's built-in default (SMTP_PORT -> 587, models -> the digest.py defaults).
           # An empty SMTP_PORT would otherwise reach int("") in deliver.py and crash.

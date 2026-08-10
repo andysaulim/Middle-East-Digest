@@ -12,15 +12,19 @@ social (X, Truth Social) comes in through a manual injection file until a paid A
 ## Pipeline
 
 ```
-run.py
- ├─ collect.py    Google News RSS + Al Jazeera live blog + outlet feeds + GDELT + manual
- │   └─ resolve.py   turns Google News redirect links into real publisher URLs (cached)
+run.py                                                     (daily brief)
+ ├─ collect.py    Google News RSS + Al Jazeera live blog + outlet feeds + GDELT + social + manual
+ │   ├─ resolve.py   turns Google News redirect links into real publisher URLs (cached)
+ │   └─ social.py    pulls X (syndication) + Truth Social (Mastodon API), no paid key
  │                                                        → data/items_<date>.json + archive.db
  ├─ digest.py     Claude clusters, selects, formats        → out/brief_<date>.md
  │   ├─ validate.py     checks the draft; regenerates on a stronger model if a CRITICAL check fails
  │   └─ calendar_data.py  appends the curated "Dates ahead" section
  ├─ render.py     Markdown → Outlook-friendly HTML          → out/brief_<date>.html
- └─ deliver.py    emails the draft (Gmail or generic SMTP), or writes the file in local mode
+ └─ deliver.py    Outlook draft (Graph) / Gmail / SMTP, or writes the file in local mode
+
+weekly.py                                                  (Friday Week in Review)
+ └─ reads data/archive.db → Claude synthesizes the week + factual tallies → render → deliver
 ```
 
 ### Collection window
@@ -40,10 +44,15 @@ run.py
 - **Direct feeds** — Times of Israel, Al Arabiya (keyword-filtered). A browser User-Agent
   lifts most of the 403s these gave v1; a `site:` Google News query is the fallback.
 - **GDELT** — event backbone; rate-limits, so it retries and degrades gracefully.
-- **Manual injection** — drop items no scraper reaches (CENTCOM/UKMTO/IDF on X, Trump on
-  Truth Social, YouTube) into `data/manual.json` (standing) or `data/manual_<date>.json`
-  (today only), as a list of `{"source","title","url"}`. This is the cheap bridge for
-  primary social sources until a paid X API is wired in.
+- **Social (`social.py`)** — pulls the watchlist automatically from free, no-account
+  endpoints: **X** via the syndication timeline (`syndication.twimg.com`, the embed feed)
+  and **Truth Social** via its Mastodon-compatible API (unauthenticated viewing still works
+  for allowed accounts like Trump). Edit `X_HANDLES` / `TRUTH_SOCIAL_ACCOUNTS` in
+  `social.py`. Both are unsupported endpoints and may `403` from a datacenter IP; on failure
+  they degrade to the manual file. Disable with `SOCIAL_FEEDS=0`.
+- **Manual injection** — the always-there fallback: drop items no scraper reaches into
+  `data/manual.json` (standing) or `data/manual_<date>.json` (today only), as a list of
+  `{"source","title","url"}`.
 
 ### Failsafes (ported from the Korea/Japan digests)
 
@@ -77,6 +86,12 @@ deadlines and appends the ones falling in the next ~45 days as a "Dates ahead" s
 It is deliberately hand-maintained (not model-generated) so the brief never invents a
 date — edit `DATES` / `ONE_OFFS` there.
 
+**Weekly rollup (`weekly.py`):** a separate Friday job reads the archive for the last seven
+days, computes factual tallies (strikes, tanker/maritime incidents, casualties, Hormuz,
+Houthi/Red Sea, nuclear, Hezbollah/Lebanon), and has Claude synthesize the week's arc in
+house style. An exact "By the numbers this week" block is appended deterministically. Runs
+via `.github/workflows/iran-weekly.yml` (Friday 21:00 UTC) or `python weekly.py`.
+
 Each file maps to a phase of the build plan and mirrors the Korea Daily Brief structure,
 so this is a fork of a proven design, not a new invention.
 
@@ -101,15 +116,19 @@ With no email variables set, `deliver.py` runs in local mode: it writes
 
 ## Delivery
 
-`deliver.py` supports two credential styles:
+`deliver.py` supports three credential styles, tried in this order:
 
+- **Outlook / Microsoft Graph** (nicest UX — a real editable draft in the mailbox): set
+  `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_MAILBOX`. Requires CSIS IT to
+  register an Entra app with the `Mail.ReadWrite` application permission (see SETUP.md §11).
+  If Graph is configured but errors, delivery falls through to Gmail rather than failing.
 - **Gmail (matches the Korea/Japan digests):** set `GMAIL_USER`, `GMAIL_APP_PASS`, and
   `DIGEST_TO` (comma-separated recipients). Sends via Gmail SMTP SSL on port 465. Optional
   `GMAIL_FROM` overrides the From alias.
 - **Generic SMTP:** set `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `REVIEWER_EMAIL`, and
   optionally `SMTP_PORT` (default 587, STARTTLS).
 
-Gmail wins if both are present; if neither is, it falls back to local mode.
+The first fully-configured style wins; if none is, it falls back to local mode.
 
 ## Go live (GitHub Actions)
 
