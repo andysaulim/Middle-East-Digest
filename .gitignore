@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Secrets / local env
+.env
+*.env
+
+# Pipeline outputs (generated each run; not source)
+pipeline/out/
+
+# Dated collection snapshots (regenerated each run; the archive DB is the durable store).
+# Note: pipeline/data/archive.db is intentionally tracked so the corpus persists.
+pipeline/data/items_*.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
