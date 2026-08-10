@@ -76,12 +76,17 @@ a few minutes instead of an hour.
 Under the hood the tool runs four steps in order. You do not need to operate these; this is
 just so the team understands what is happening.
 
-**Step 1 — Collect.** The tool queries several free news sources for the last 24 hours (see
+**Step 1 — Collect.** The tool queries several free news sources (see
 [Section 6](#6-where-the-news-comes-from)), pulls back the day's candidate articles, removes
-duplicates by matching similar headlines, and saves the result both as the day's working list
-and into the permanent archive. A typical run gathers a few hundred raw articles that collapse
-to a smaller deduplicated set. If a source is temporarily unavailable, the tool notes it and
-moves on rather than failing.
+duplicates by matching similar headlines (keeping the stronger outlet when a story appears
+twice), and saves the result both as the day's working list and into the permanent archive.
+It looks back **one day on Tuesday through Friday, and three days on Monday** so the Monday
+brief carries the whole weekend — Saturday, Sunday, and Monday morning up to the send. A
+typical run gathers a few hundred raw articles that collapse to a smaller deduplicated set.
+It then cleans up the links (many news feeds hand back long redirect links; the tool
+converts them to the real publisher address, e.g. `reuters.com` or `aje.news`, so the final
+email carries clean, familiar source links). If a source is temporarily unavailable, the
+tool notes it and moves on rather than failing.
 
 **Step 2 — Digest (the drafting).** The deduplicated list is handed to Claude (Anthropic's AI
 model) together with the program's house-style instructions. In one pass the model clusters
@@ -101,6 +106,13 @@ tool redrafts, escalating to a stronger model. Softer issues (an unusual item co
 "claim," no strong outlet in the day's input) are logged for the reviewer but do not block
 sending.
 
+**Step 2c — Finish the layout.** After validation, the tool guarantees every country
+header is present in the standard order, so a quiet country reads "No developments reported."
+instead of silently disappearing (the reader can always tell "nothing happened" from
+"we missed it"). It then appends a short **"Dates ahead"** section listing upcoming
+anniversaries and deadlines that fall in the next few weeks. That list is hand-maintained,
+not generated, so the brief never invents a date.
+
 **Step 3 — Render.** The drafted brief is converted from plain text into a tidy HTML email
 that mirrors the tracker's familiar look: bold category headers, bulleted items, indented
 sub-bullets for quotes or follow-on detail, and source links on the verb. It is built to
@@ -116,8 +128,9 @@ and a copy is attached to the run so someone can open and send it manually (see
 The tool is not writing freely. It follows an explicit style specification (the file
 `Iran War Update — Formatter Prompt.md` in the repository). The key rules:
 
-- **Categories, in this fixed order**, omitting any that are empty: US, Iran, Lebanon, Israel,
-  Yemen / Saudi Arabia, Oman, General.
+- **Categories, in this fixed order, always shown**: US, Iran, Lebanon, Israel,
+  Yemen / Saudi Arabia, Oman, Iraq, Egypt, Jordan, Syria, Caspian Sea, General. A country
+  with no news that day shows "No developments reported." rather than being dropped.
 - **One bullet per item**, phrased as "On [Weekday], [actor] [verb] [what happened]."
 - **The source link sits on the reporting verb** (for example, the word "said" or "reported"
   becomes the hyperlink).
@@ -131,29 +144,43 @@ The tool is not writing freely. It follows an explicit style specification (the 
   everything it found. Opinion pieces, explainers, and trivia are dropped.
 - **Mechanics:** U.S. and U.K. keep their periods, percentages are spelled out ("42 percent"),
   the serial comma is used, specific figures are given as numerals, and em-dashes are avoided.
+- **Dates ahead.** The brief ends with a short curated list of upcoming anniversaries and
+  deadlines (see [Section 6](#6-where-the-news-comes-from) for how to edit it).
 
 Because the style lives in a written spec, it can be adjusted deliberately, and every change is
 applied consistently from the next run onward.
 
 ## 6. Where the news comes from
 
-Version 1 uses only free, public, keyless sources, so there are no paid subscriptions to
-maintain:
+The tool uses free, public, keyless sources, so there are no paid subscriptions to maintain:
 
 - **Google News search feeds.** The main relevance engine. The tool runs a set of standing
-  searches and takes the last 24 hours of results, with the real outlet named on each item.
-  The current searches cover: the Strait of Hormuz, US-Iran negotiations, Houthi and Red Sea
-  shipping, Israel-Lebanon-Hezbollah, Iran's nuclear program and the IRGC, Yemen and Saudi
-  Arabia, and the Iran-Oman Hormuz track.
-- **Direct outlet feeds**, filtered to relevant items: Al Jazeera, Times of Israel, and Al
-  Arabiya.
+  searches, with the real outlet named on each item. The searches cover the Strait of Hormuz,
+  US-Iran negotiations, Houthi and Red Sea shipping, Israel-Lebanon-Hezbollah, Iran's nuclear
+  program and the IRGC, Yemen and Saudi Arabia, the Iran-Oman track, and the wider region
+  (Iraq, Egypt, Jordan, Syria, and the Caspian corridor).
+- **Al Jazeera live blog.** The human tracker leans heavily on Al Jazeera's rolling live
+  blog, so the tool scrapes Al Jazeera's Middle East section and live blog directly for its
+  article links, not just its thin headline feed.
+- **Direct outlet feeds**, filtered to relevant items: Times of Israel and Al Arabiya.
 - **GDELT**, a global news-event database, as a backbone to catch events the searches miss.
+- **Manual additions (the social bridge).** Primary posts that no free scraper reaches —
+  CENTCOM, UKMTO, and the IDF on X, named spokesmen, Trump on Truth Social, a YouTube
+  clip — can be added by hand: paste a few `{source, title, link}` entries into a small file
+  (`pipeline/data/manual.json`) and the next run folds them into the brief. This is the
+  cheap stand-in for a paid social feed.
 
 A keyword filter (Iran, Tehran, Hormuz, Houthi, IRGC, Hezbollah, Lebanon, Israel, IDF, Yemen,
-Saudi, tanker, strait, nuclear, and others) keeps the mixed-topic feeds on-beat.
+Saudi, Iraq, Syria, Jordan, Egypt, Caspian, tanker, strait, nuclear, and others) keeps the
+mixed-topic feeds on-beat.
 
-All of these can be changed. Adding an outlet, adjusting a search, or broadening beyond Iran to
-the wider Middle East is a quick configuration change (see [Section 16](#16-requesting-changes)).
+**Editing the "Dates ahead" list.** The upcoming-dates section is a hand-maintained list in
+`pipeline/calendar_data.py`. To add an anniversary or a deadline, add one line to that file
+(a month, day, and label); it will appear automatically when the date is within about six
+weeks. Keeping it by hand is deliberate, so the brief never fabricates a date.
+
+All of these can be changed. Adding an outlet, adjusting a search, or broadening the beat is a
+quick configuration change (see [Section 16](#16-requesting-changes)).
 
 ## 7. The reviewer's role
 
@@ -183,9 +210,11 @@ Being honest about the current limits:
 
 - **It does not send to the team by itself.** Only the reviewer does that. This is by design,
   not a limitation to be removed.
-- **No X or social feeds yet.** Direct posts from CENTCOM, UKMTO, the IDF, and named
-  spokesmen are not pulled in this version, because that needs the paid X API or a manual
-  watchlist. Google News surfaces much of it secondhand. Direct social is a planned addition.
+- **Social is semi-automatic.** Direct posts from CENTCOM, UKMTO, the IDF, named spokesmen,
+  and Trump (Truth Social) are not scraped automatically — that needs the paid X API. For
+  now an editor pastes the key primary posts into the manual file (see
+  [Section 6](#6-where-the-news-comes-from)) and the tool includes them; Google News and Al
+  Jazeera surface much of the rest secondhand. Fully automated social is a planned addition.
 - **Some feeds are occasionally unavailable.** A source that blocks automated requests or rate
   limits is skipped for that run; the draft is built from whatever came through. The tool logs
   what it skipped.
@@ -193,8 +222,8 @@ Being honest about the current limits:
   Outlook draft directly in the mailbox via Microsoft's email API, instead of sending an email
   to yourself.
 
-Roadmap, in rough order: direct social/watchlist sources, the Microsoft Outlook-draft
-delivery, and automated weekly rollups built on the archive.
+Roadmap, in rough order: a paid X/social feed to automate the manual step, the Microsoft
+Outlook-draft delivery, and automated weekly rollups built on the archive.
 
 ## 10. Who does what
 

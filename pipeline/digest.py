@@ -11,6 +11,10 @@ fails (a stub-length brief, a fabricated link, a missing header), the brief is
 regenerated — escalating from the fast model to a stronger one, mirroring the
 Korea/Japan digests' validate-and-regenerate guardrail.
 
+After validation, every standard country header is guaranteed present (a country with no
+news shows "No developments reported." rather than vanishing), and a curated "Dates ahead"
+section is appended from calendar_data.py.
+
 System prompt below is the machine version of `Iran War Update — Formatter Prompt.md`;
 keep the two in sync.
 
@@ -22,15 +26,15 @@ IRAN_BRIEF_PRIMARY_MODEL is the escalation model used on a validation retry
 
 import os
 import json
+import re
 import sys
 from collections import OrderedDict
 from itertools import zip_longest
 from datetime import datetime, timezone
 from pathlib import Path
 
-import anthropic
-
 import validate
+import calendar_data
 
 DATA_DIR = Path(__file__).parent / "data"
 OUT_DIR = Path(__file__).parent / "out"
@@ -42,19 +46,40 @@ PRIMARY_MODEL = os.environ.get("IRAN_BRIEF_PRIMARY_MODEL", "claude-opus-4-8")
 MAX_ATTEMPTS = 3       # 1 fast attempt + up to 2 escalated retries
 MAX_CANDIDATES = 300   # cap items sent to the model (interleaved across topics first)
 
+# Every country header, always shown in this order (matches the human tracker). A header
+# with no development today is filled with a "No developments reported." placeholder.
+CATEGORIES = [
+    "US", "Iran", "Lebanon", "Israel", "Yemen / Saudi Arabia", "Oman",
+    "Iraq", "Egypt", "Jordan", "Syria", "Caspian Sea", "General",
+]
+NO_NEWS = "- No developments reported."
+
+# Aliases the model might emit, mapped to the canonical header.
+_ALIASES = {
+    "unitedstates": "US", "usa": "US",
+    "yemensaudiarabia": "Yemen / Saudi Arabia", "yemen": "Yemen / Saudi Arabia",
+    "saudiarabia": "Yemen / Saudi Arabia", "saudi": "Yemen / Saudi Arabia",
+    "caspian": "Caspian Sea",
+}
+
 SYSTEM_PROMPT = """\
 You format daily news items into the CSIS Middle East Program's "Iran War Update" house
 style. You receive a JSON list of candidate news items (title, source, url) collected in
-the last 24 hours. Many are duplicate reports of the same event from different outlets.
+the last 24 hours (three days on a Monday, covering the weekend). Many are duplicate
+reports of the same event from different outlets.
 
 Produce the day's brief. Steps:
 1. CLUSTER items that describe the same event.
 2. SELECT the genuinely significant developments. Drop opinion pieces, explainers, and
-   trivia. Be COMPREHENSIVE: aim for roughly 15-40 items across the whole brief, and cover
-   every region that has real developments today. Never omit an active region (Lebanon,
+   trivia. Be COMPREHENSIVE: aim for roughly 15-40 real items across the whole brief, and
+   cover every region that has real developments. Never omit an active region (Lebanon,
    Yemen, etc.) just because most of the day's volume is about one story (e.g. Hormuz).
-3. CATEGORIZE each into exactly these headers, in this order (omit only a genuinely empty
-   header): US, Iran, Lebanon, Israel, Yemen / Saudi Arabia, Oman, General.
+3. CATEGORIZE into exactly these headers, ALWAYS including EVERY header in this exact
+   order, even when a header has no news:
+   US, Iran, Lebanon, Israel, Yemen / Saudi Arabia, Oman, Iraq, Egypt, Jordan, Syria,
+   Caspian Sea, General.
+   For a header with no genuine development today, write the header followed by a single
+   bullet exactly: "- No developments reported." Do not drop any header.
 4. WRITE each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
    - Put the source hyperlink on the reporting verb, Markdown style: [said](url).
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
@@ -66,8 +91,9 @@ Produce the day's brief. Steps:
    (a death toll, a strike, an official position), append ` [single-source]`.
 6. PRESTIGE: when a development was reported by a strong outlet — The Wall Street Journal,
    The New York Times, Financial Times, Reuters, The Associated Press, Bloomberg, The
-   Economist, The Washington Post, or a recognized regional specialist — prefer it as the
-   linked source, and do not drop a genuinely significant development that they reported.
+   Economist, The Washington Post, Al Jazeera, or a recognized regional specialist — prefer
+   it as the linked source, and do not drop a genuinely significant development they
+   reported.
 7. Only use URLs present in the input. Never invent a link or an event not in the input.
 
 Mechanics: U.S. and U.K. keep periods. Spell out percentages ("42 percent"). Serial comma.
@@ -75,7 +101,7 @@ No em-dashes. Numerals for specific figures.
 
 Output ONLY the finished brief in Markdown, starting with the line:
 **Some updates on the Iran war (M/D):**
-Use today's date the user gives you. No preamble, no commentary after.
+Use the date the user gives you. No preamble, no commentary after.
 """
 
 
@@ -100,8 +126,53 @@ def _interleave(items):
     return ordered
 
 
+def _header_name(line):
+    """If a line is a bold section header (**X**, no link), return X; else None."""
+    s = line.strip()
+    if s.startswith("**") and s.endswith("**") and "](" not in s and len(s) > 4:
+        return s.strip("*").strip()
+    return None
+
+
+def ensure_sections(brief_md):
+    """Guarantee every standard header is present, in canonical order, filling any header
+    that has no items with the "No developments reported." placeholder.
+
+    Reorders the model's sections into CATEGORIES order. Content under an unrecognized
+    header flows into General rather than being dropped, so no real item is lost."""
+    lines = brief_md.splitlines()
+    if not lines:
+        return brief_md
+    title, body = lines[0], lines[1:]
+
+    canon_by_key = {re.sub(r"[^a-z]", "", c.lower()): c for c in CATEGORIES}
+    sections, current = OrderedDict(), None
+    for line in body:
+        h = _header_name(line)
+        if h is not None:
+            key = re.sub(r"[^a-z]", "", h.lower())
+            current = canon_by_key.get(key) or _ALIASES.get(key) or "General"
+            sections.setdefault(current, [])
+            continue
+        if current is None:
+            continue  # stray preamble before the first header
+        # skip the model's own placeholders; we re-add them uniformly below
+        if line.strip().lower().startswith("- no developments reported"):
+            continue
+        sections.setdefault(current, []).append(line)
+
+    out = [title]
+    for c in CATEGORIES:
+        content = [ln for ln in sections.get(c, []) if ln.strip()]
+        out.append("")
+        out.append(f"**{c}**")
+        out.extend(content if content else [NO_NEWS])
+    return "\n".join(out).strip()
+
+
 def _generate(client, model, slim, date_label):
     """One drafting pass with a given model. Returns the brief Markdown."""
+    import anthropic
     # Disable extended thinking: on current models (e.g. claude-sonnet-5) adaptive
     # thinking is ON by default, and it consumes the max_tokens budget — which left
     # the brief truncated to a near-empty stub on the first live run. This is a
@@ -131,6 +202,8 @@ def _generate(client, model, slim, date_label):
 
 
 def build_brief():
+    import anthropic
+
     items_path = latest_items_file()
     items = json.loads(items_path.read_text(encoding="utf-8"))
 
@@ -179,6 +252,13 @@ def build_brief():
                 f"Brief failed validation after {len(attempts)} attempts and repair: "
                 f"{last_critical}"
             )
+
+    # Guarantee every country header is present (no-news countries show a placeholder),
+    # then append the curated "Dates ahead" section.
+    brief_md = ensure_sections(brief_md)
+    dates = calendar_data.render_section(today.date())
+    if dates:
+        brief_md = f"{brief_md}\n\n{dates}"
 
     out_path = OUT_DIR / f"brief_{today.strftime('%Y-%m-%d')}.md"
     out_path.write_text(brief_md, encoding="utf-8")

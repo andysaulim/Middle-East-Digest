@@ -13,7 +13,8 @@ CRITICAL (fail -> regenerate / escalate, then raise if still unresolved):
   - missing the house-style header line
 
 WARNING (logged, non-blocking):
-  - top-level item count outside the 12-25 house target
+  - top-level item count outside the 15-40 house target ("No developments reported."
+    placeholder bullets do not count)
   - "claim" used as a reporting verb (house style avoids it to imply doubt)
   - no prestige-outlet items present in today's input (informational)
 
@@ -38,6 +39,7 @@ PRESTIGE = [
 _LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)]+)\)")
 _TOP_BULLET_RE = re.compile(r"^[-*]\s+", re.MULTILINE)   # non-indented bullets only
 _CLAIM_RE = re.compile(r"\bclaim(s|ed|ing)?\b", re.IGNORECASE)
+_NO_NEWS_RE = re.compile(r"^[-*]\s+No developments reported\.?\s*$", re.MULTILINE)
 
 
 def extract_urls(md):
@@ -108,8 +110,8 @@ def validate_brief(brief_md, items):
             f"{unknown[:3]}"
         )
 
-    # Item count
-    n_items = len(_TOP_BULLET_RE.findall(text))
+    # Item count (excluding "No developments reported." placeholders, which are not news)
+    n_items = len(_TOP_BULLET_RE.findall(text)) - len(_NO_NEWS_RE.findall(text))
     if n_items < MIN_ITEMS_CRITICAL:
         critical.append(f"only {n_items} top-level item(s); brief looks incomplete")
     elif n_items < TARGET_MIN or n_items > TARGET_MAX:

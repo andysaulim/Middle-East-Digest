@@ -6,18 +6,44 @@ and drops a ready-to-send draft in a reviewer's inbox. A human still glances and
 
 **Delivery mode:** auto-draft, you send. The pipeline emails the finished brief to one
 reviewer, not to the team list.
-**v1 sources:** free RSS + GDELT (no paid keys). Social (X) is a later add.
+**Sources:** free RSS + Google News + Al Jazeera live blog + GDELT (no paid keys). Primary
+social (X, Truth Social) comes in through a manual injection file until a paid API is added.
 
 ## Pipeline
 
 ```
 run.py
- ├─ collect.py    Google News RSS + outlet feeds + GDELT  → data/items_<date>.json + archive.db
+ ├─ collect.py    Google News RSS + Al Jazeera live blog + outlet feeds + GDELT + manual
+ │   └─ resolve.py   turns Google News redirect links into real publisher URLs (cached)
+ │                                                        → data/items_<date>.json + archive.db
  ├─ digest.py     Claude clusters, selects, formats        → out/brief_<date>.md
- │   └─ validate.py  checks the draft; regenerates on a stronger model if a CRITICAL check fails
+ │   ├─ validate.py     checks the draft; regenerates on a stronger model if a CRITICAL check fails
+ │   └─ calendar_data.py  appends the curated "Dates ahead" section
  ├─ render.py     Markdown → Outlook-friendly HTML          → out/brief_<date>.html
  └─ deliver.py    emails the draft (Gmail or generic SMTP), or writes the file in local mode
 ```
+
+### Collection window
+
+1 day on Tuesday–Friday; **3 days on Monday** so the Monday brief carries the weekend
+(Saturday, Sunday, and Monday morning up to the ~7am ET send). After a holiday, set the
+`LOOKBACK_DAYS` env var to widen the window for one run.
+
+### Sources and how to extend them
+
+- **Google News RSS** — the relevance engine; edit `GOOGLE_NEWS_QUERIES` in `collect.py`.
+  Its links are opaque redirects, so `resolve.py` canonicalizes them to the real publisher
+  URL (e.g. `reuters.com`, `aje.news`). That both fixes the SOURCE-OR-SKIP validator (the
+  model can copy a short link accurately) and gives the email clean, house-style links.
+- **Al Jazeera** — the human tracker's backbone. `collect.py` scrapes the Middle East
+  section and live blog for canonical article links (the plain AJ RSS feed is too thin).
+- **Direct feeds** — Times of Israel, Al Arabiya (keyword-filtered). A browser User-Agent
+  lifts most of the 403s these gave v1; a `site:` Google News query is the fallback.
+- **GDELT** — event backbone; rate-limits, so it retries and degrades gracefully.
+- **Manual injection** — drop items no scraper reaches (CENTCOM/UKMTO/IDF on X, Trump on
+  Truth Social, YouTube) into `data/manual.json` (standing) or `data/manual_<date>.json`
+  (today only), as a list of `{"source","title","url"}`. This is the cheap bridge for
+  primary social sources until a paid X API is wired in.
 
 ### Failsafes (ported from the Korea/Japan digests)
 
@@ -39,6 +65,17 @@ use of "claim", no prestige outlet in the input) are logged but do not block del
 **Coverage:** `digest.py` interleaves candidates across the collection queries before the
 `MAX_CANDIDATES` cap, so every region is represented instead of the cap being filled by the
 first one or two queries. Add or retune queries in `collect.py`'s `GOOGLE_NEWS_QUERIES`.
+
+**Every country, every day:** after validation, `digest.py` guarantees all standard
+headers are present in a fixed order (US, Iran, Lebanon, Israel, Yemen / Saudi Arabia,
+Oman, Iraq, Egypt, Jordan, Syria, Caspian Sea, General). A country with no news shows
+`No developments reported.` rather than disappearing, so the reader can tell "quiet" from
+"missed." Edit the `CATEGORIES` list in `digest.py` to change the set.
+
+**Dates ahead:** `calendar_data.py` holds a curated list of upcoming anniversaries and
+deadlines and appends the ones falling in the next ~45 days as a "Dates ahead" section.
+It is deliberately hand-maintained (not model-generated) so the brief never invents a
+date — edit `DATES` / `ONE_OFFS` there.
 
 Each file maps to a phase of the build plan and mirrors the Korea Daily Brief structure,
 so this is a fork of a proven design, not a new invention.
@@ -113,8 +150,13 @@ casualty tallies).
 
 - **Human in the loop stays.** Auto-draft, not auto-send. The reviewer is the two-source
   gate before anything reaches the team.
-- **No X/social yet.** CENTCOM, UKMTO, IDF, and named spokesmen need the paid X API or a
-  manual watchlist. v1 ships without them; Google News surfaces much of it secondhand.
+- **Social is semi-manual.** CENTCOM, UKMTO, IDF, named spokesmen, and Trump (Truth
+  Social) need the paid X API for full automation. Until then, an editor drops the key
+  primary posts into `data/manual.json` and the pipeline folds them in; Google News and Al
+  Jazeera surface much of the rest secondhand.
+- **URL resolution is best-effort.** `resolve.py` calls Google to canonicalize redirect
+  links; if Google rate-limits, links fall back to the (working, if ugly) redirect and the
+  run still ships. Disable with `RESOLVE_URLS=0`.
 - **Flaky feeds degrade gracefully.** Some feeds block scripted requests (Al Arabiya
   returned 403 on the first run) and GDELT rate-limits; the collector logs and moves on.
 - **Draft delivery via SMTP self-email** is the simple v1. A cleaner version creates a real

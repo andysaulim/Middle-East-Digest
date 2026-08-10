@@ -16,14 +16,22 @@ last 24 hours. Many are duplicate reports of the same event from different outle
 2. **Select** the genuinely significant developments. Drop opinion, explainers, and trivia,
    but be comprehensive: aim for roughly 15–40 items and cover every region that has real
    developments. Never omit an active region (Lebanon, Yemen, etc.) just because most of the
-   day's volume is about one story.
-3. **Categorize** each into exactly these headers, in this order (omit an empty header):
+   day's volume is about one story. (On Mondays the input covers the whole weekend —
+   Saturday, Sunday, and Monday morning — so expect more items.)
+3. **Categorize** each into exactly these headers, **always including every header in this
+   order, even when a header has no news**. For a header with no development today, write
+   the header and a single bullet: `- No developments reported.` Never drop a header.
    - US
    - Iran
    - Lebanon
    - Israel
    - Yemen / Saudi Arabia
    - Oman
+   - Iraq
+   - Egypt
+   - Jordan
+   - Syria
+   - Caspian Sea
    - General
 4. **Write** each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
    - Put the source hyperlink on the reporting verb, Markdown style: `[said](url)`.
@@ -36,9 +44,14 @@ last 24 hours. Many are duplicate reports of the same event from different outle
    load-bearing (a death toll, a strike, an official position), append ` [single-source]`.
 6. **Prestige:** when a development was reported by a strong outlet — The Wall Street
    Journal, The New York Times, Financial Times, Reuters, The Associated Press, Bloomberg,
-   The Economist, The Washington Post, or a recognized regional specialist — prefer it as
-   the linked source, and do not drop a genuinely significant development that they reported.
+   The Economist, The Washington Post, Al Jazeera, or a recognized regional specialist —
+   prefer it as the linked source, and do not drop a genuinely significant development that
+   they reported.
 7. **Only use URLs present in the input.** Never invent a link or an event not in the input.
+
+The pipeline appends a curated **"Dates ahead"** section (upcoming anniversaries and
+deadlines) after the brief automatically — you do not write it, and you must not invent
+dates yourself.
 
 ## Mechanics
 
