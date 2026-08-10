@@ -77,9 +77,15 @@ def build_brief():
     date_label = f"{today.month}/{today.day}"
 
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
-    msg = client.messages.create(
+    # Disable extended thinking: on current models (e.g. claude-sonnet-5) adaptive
+    # thinking is ON by default, and it consumes the max_tokens budget — which left
+    # the brief truncated to a near-empty stub on the first live run. This is a
+    # deterministic clustering/formatting task, so no thinking is needed; give the
+    # whole budget to the brief. (If a model rejects disabled thinking, e.g. Fable 5,
+    # retry without the parameter and rely on a large max_tokens.)
+    create_kwargs = dict(
         model=MODEL,
-        max_tokens=4000,
+        max_tokens=8000,
         system=SYSTEM_PROMPT,
         messages=[{
             "role": "user",
@@ -87,6 +93,10 @@ def build_brief():
                         f"as JSON:\n\n{json.dumps(slim, ensure_ascii=False)}"),
         }],
     )
+    try:
+        msg = client.messages.create(thinking={"type": "disabled"}, **create_kwargs)
+    except anthropic.BadRequestError:
+        msg = client.messages.create(**create_kwargs)
     # The model may emit a thinking block before the answer, so content[0] is not
     # necessarily the text. Concatenate every text block and ignore the rest.
     brief_md = "".join(
