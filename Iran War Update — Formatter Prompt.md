@@ -31,7 +31,11 @@ last 24 hours. Many are duplicate reports of the same event from different outle
 5. **Sourcing:** if a cluster has two or more independent outlets, it is corroborated; pick
    the strongest source for the link. If an item rests on a single source and is
    load-bearing (a death toll, a strike, an official position), append ` [single-source]`.
-6. **Only use URLs present in the input.** Never invent a link or an event not in the input.
+6. **Prestige:** when a development was reported by a strong outlet — The Wall Street
+   Journal, The New York Times, Financial Times, Reuters, The Associated Press, Bloomberg,
+   The Economist, The Washington Post, or a recognized regional specialist — prefer it as
+   the linked source, and do not drop a genuinely significant development that they reported.
+7. **Only use URLs present in the input.** Never invent a link or an event not in the input.
 
 ## Mechanics
 
@@ -50,3 +54,17 @@ Output ONLY the finished brief in Markdown, starting with the line:
 ```
 
 Use the date the user gives you. No preamble, and no commentary after the brief.
+
+## Validation (enforced after drafting)
+
+`pipeline/validate.py` checks the drafted brief before it ships. A CRITICAL failure
+triggers a regenerate on a stronger model (up to two retries), so the rules above are
+mechanically enforced, not just requested:
+
+- **Stub guard** — an empty or very short brief is rejected (catches truncated output).
+- **SOURCE-OR-SKIP** — every linked URL must have appeared in the collected input; a link
+  that wasn't in the input is treated as a fabrication and fails the brief.
+- **Header** — the brief must open with the house header line.
+
+Warnings (item count outside 12–25, use of "claim", no prestige outlet in the day's input)
+are logged for the reviewer but do not block delivery.

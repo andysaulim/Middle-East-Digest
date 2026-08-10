@@ -12,11 +12,28 @@ reviewer, not to the team list.
 
 ```
 run.py
- ├─ collect.py   Google News RSS + outlet feeds + GDELT  → data/items_<date>.json + archive.db
- ├─ digest.py    Claude clusters, selects, formats        → out/brief_<date>.md
- ├─ render.py    Markdown → Outlook-friendly HTML          → out/brief_<date>.html
- └─ deliver.py   emails the draft to REVIEWER_EMAIL (or writes the file in local mode)
+ ├─ collect.py    Google News RSS + outlet feeds + GDELT  → data/items_<date>.json + archive.db
+ ├─ digest.py     Claude clusters, selects, formats        → out/brief_<date>.md
+ │   └─ validate.py  checks the draft; regenerates on a stronger model if a CRITICAL check fails
+ ├─ render.py     Markdown → Outlook-friendly HTML          → out/brief_<date>.html
+ └─ deliver.py    emails the draft (Gmail or generic SMTP), or writes the file in local mode
 ```
+
+### Failsafes (ported from the Korea/Japan digests)
+
+`digest.py` runs a **validate-and-regenerate** loop. After each draft, `validate.py`
+checks it, and a CRITICAL failure triggers a retry that escalates from the fast model to a
+stronger one:
+
+- **Stub guard** — rejects an empty or truncated brief.
+- **SOURCE-OR-SKIP** — every linked URL must have appeared in the collected input; a link
+  that wasn't in the input fails the brief (blocks fabricated links).
+- **Header** — the brief must open with the house header line.
+- **Prestige** — the formatter prompt requires strong outlets (WSJ, NYT, FT, Reuters, AP,
+  Bloomberg, The Economist, WaPo, specialists) to be preferred when they reported a story.
+
+Warnings (item count outside 12–25, use of "claim", no prestige outlet in the input) are
+logged but do not block delivery.
 
 Each file maps to a phase of the build plan and mirrors the Korea Daily Brief structure,
 so this is a fork of a proven design, not a new invention.
@@ -37,15 +54,28 @@ export ANTHROPIC_API_KEY=sk-ant-...
 python run.py
 ```
 
-With no SMTP variables set, `deliver.py` runs in local mode: it writes
+With no email variables set, `deliver.py` runs in local mode: it writes
 `out/brief_<date>.html` and prints the path for you to open and send yourself.
+
+## Delivery
+
+`deliver.py` supports two credential styles:
+
+- **Gmail (matches the Korea/Japan digests):** set `GMAIL_USER`, `GMAIL_APP_PASS`, and
+  `DIGEST_TO` (comma-separated recipients). Sends via Gmail SMTP SSL on port 465. Optional
+  `GMAIL_FROM` overrides the From alias.
+- **Generic SMTP:** set `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `REVIEWER_EMAIL`, and
+  optionally `SMTP_PORT` (default 587, STARTTLS).
+
+Gmail wins if both are present; if neither is, it falls back to local mode.
 
 ## Go live (GitHub Actions)
 
 1. Put this `pipeline/` folder in a private GitHub repo.
-2. Add repo **secrets**: `ANTHROPIC_API_KEY`, `REVIEWER_EMAIL`, and for automated draft
-   delivery `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`. Optionally set repo
-   **variable** `IRAN_BRIEF_MODEL`.
+2. Add repo **secrets**: `ANTHROPIC_API_KEY`, plus delivery credentials — either the Gmail
+   set (`GMAIL_USER`, `GMAIL_APP_PASS`, `DIGEST_TO`) or the generic-SMTP set (`SMTP_HOST`,
+   `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `REVIEWER_EMAIL`). Optionally set repo
+   **variables** `IRAN_BRIEF_MODEL` and `IRAN_BRIEF_PRIMARY_MODEL`.
 3. The workflow in `.github/workflows/iran-brief.yml` runs weekdays at 11:30 UTC (7:30 AM
    ET) and can also be triggered by hand from the Actions tab. It uploads the brief as a
    downloadable artifact and commits the SQLite archive so trends persist.
@@ -53,8 +83,11 @@ With no SMTP variables set, `deliver.py` runs in local mode: it writes
 ## Configuration
 
 - **Sources:** edit `GOOGLE_NEWS_QUERIES`, `DIRECT_FEEDS`, and `KEYWORDS` in `collect.py`.
-- **Model:** `IRAN_BRIEF_MODEL` env var (default `claude-sonnet-5`; use an Opus id for
-  higher quality at higher cost).
+- **Models:** `IRAN_BRIEF_MODEL` is the fast first-attempt model (default `claude-sonnet-5`);
+  `IRAN_BRIEF_PRIMARY_MODEL` is the stronger model used on a validation retry (default
+  `claude-opus-4-8`).
+- **Validation:** thresholds live in `validate.py` (`MIN_CHARS`, `MIN_ITEMS_CRITICAL`,
+  the 12–25 target, the prestige list).
 - **House format:** the formatter rules live in `digest.py`'s `SYSTEM_PROMPT`, kept in sync
   with `../Iran War Update — Formatter Prompt.md`.
 - **Schedule / send time:** the `cron` line in the workflow.
