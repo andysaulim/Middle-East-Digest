@@ -26,6 +26,7 @@ the one section aimed at a technical administrator is clearly marked.
 14. [Cost, privacy, and data handling](#14-cost-privacy-and-data-handling)
 15. [Where to find things](#15-where-to-find-things)
 16. [Requesting changes](#16-requesting-changes)
+17. [Next steps](#17-next-steps)
 
 ---
 
@@ -126,7 +127,7 @@ The tool is not writing freely. It follows an explicit style specification (the 
   treated as corroborated and the strongest source is linked. If an item rests on a single
   source and is load-bearing (a death toll, a strike, an official position), it is tagged
   `[single-source]` so the reviewer knows to double-check it.
-- **Selectivity.** The tool aims for roughly 12 to 25 items across the whole brief, not
+- **Selectivity.** The tool aims for roughly 15 to 40 items across the whole brief, not
   everything it found. Opinion pieces, explainers, and trivia are dropped.
 - **Mechanics:** U.S. and U.K. keep their periods, percentages are spelled out ("42 percent"),
   the serial comma is used, specific figures are given as numerals, and em-dashes are avoided.
@@ -333,3 +334,39 @@ Want different sources, a broader Middle East scope, more or fewer items, a diff
 time, a second reviewer, or the finished brief exported as a document? All of these are
 straightforward configuration changes. Pass the request to whoever manages the repository, and
 it can be adjusted from the next run onward.
+
+## 17. Next steps
+
+### Go live this week
+
+1. **Confirm one manual run end to end** — a full brief is produced, it passes validation,
+   and it lands in the reviewer's inbox (test with the "Run workflow" button).
+2. **Watch a few weekday-morning runs** before trusting the schedule unattended.
+3. **Name the reviewer** and share this guide (and the house-style spec) with the team.
+
+### Near-term, small enhancements
+
+- **Action housekeeping.** The GitHub Actions steps still run on the deprecated Node 20
+  runtime; bump `actions/checkout`, `actions/setup-python`, and `actions/upload-artifact` to
+  current versions. Harmless today, quick to do.
+- **Tune to taste.** Adjust the source searches, the 15–40 item target, the send time, or add
+  a second reviewer. Broaden coverage from Iran to the wider Middle East if wanted.
+
+### Roadmap (larger builds)
+
+- **Injected fact trackers** — the one remaining failsafe from the Korea and Japan digests.
+  Maintain Iran-specific trackers (tanker / Strait of Hormuz incidents, casualty tallies,
+  facility status) and inject them into the drafting step, so those figures come from a
+  verified record rather than model recall.
+- **Richer primary sources — the main path to matching a hand-compiled brief.** A
+  hand-compiled edition draws heavily on sources this version does not yet collect: X posts
+  (UNIFIL, UKMTO, Windward, the IDF, US embassies, named Houthi and Iranian spokesmen,
+  shipping associations), Truth Social, YouTube, and the granular Al Jazeera war liveblog.
+  Adding these — via the paid X API or dedicated watchers/scrapers, plus a liveblog reader —
+  is what would close most of the gap in depth and breadth.
+- **Weekly "Week in Review"** — a Friday rollup built on the archive (the Korea digest has an
+  equivalent), summarizing the week's developments and trend lines.
+- **Outlook-draft delivery (optional)** — instead of a Gmail send, create a real draft in a
+  mailbox via the Microsoft Graph API, if the team prefers to send from Outlook.
+
+Pass any of these to whoever manages the repository to schedule.

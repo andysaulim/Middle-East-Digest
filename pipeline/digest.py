@@ -23,6 +23,8 @@ IRAN_BRIEF_PRIMARY_MODEL is the escalation model used on a validation retry
 import os
 import json
 import sys
+from collections import OrderedDict
+from itertools import zip_longest
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -38,7 +40,7 @@ OUT_DIR.mkdir(exist_ok=True)
 FAST_MODEL = os.environ.get("IRAN_BRIEF_MODEL", "claude-sonnet-5")
 PRIMARY_MODEL = os.environ.get("IRAN_BRIEF_PRIMARY_MODEL", "claude-opus-4-8")
 MAX_ATTEMPTS = 3       # 1 fast attempt + up to 2 escalated retries
-MAX_CANDIDATES = 150   # cap items sent to the model to control token cost
+MAX_CANDIDATES = 300   # cap items sent to the model (interleaved across topics first)
 
 SYSTEM_PROMPT = """\
 You format daily news items into the CSIS Middle East Program's "Iran War Update" house
@@ -48,14 +50,17 @@ the last 24 hours. Many are duplicate reports of the same event from different o
 Produce the day's brief. Steps:
 1. CLUSTER items that describe the same event.
 2. SELECT the genuinely significant developments. Drop opinion pieces, explainers, and
-   trivia. Aim for 12-25 items across the whole brief, not everything.
-3. CATEGORIZE each into exactly these headers, in this order (omit an empty header):
-   US, Iran, Lebanon, Israel, Yemen / Saudi Arabia, Oman, General.
+   trivia. Be COMPREHENSIVE: aim for roughly 15-40 items across the whole brief, and cover
+   every region that has real developments today. Never omit an active region (Lebanon,
+   Yemen, etc.) just because most of the day's volume is about one story (e.g. Hormuz).
+3. CATEGORIZE each into exactly these headers, in this order (omit only a genuinely empty
+   header): US, Iran, Lebanon, Israel, Yemen / Saudi Arabia, Oman, General.
 4. WRITE each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
    - Put the source hyperlink on the reporting verb, Markdown style: [said](url).
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
      use "claim" to imply doubt.
-   - Add an indented sub-bullet for a quote or a follow-on detail when warranted.
+   - Add an indented sub-bullet for a direct quote, a casualty or transit figure, or a
+     load-bearing follow-on detail. Keep specific numbers (counts, tolls, percentages).
 5. SOURCING: if a cluster has two or more independent outlets, it is corroborated; pick the
    strongest source for the link. If an item rests on a single source and is load-bearing
    (a death toll, a strike, an official position), append ` [single-source]`.
@@ -79,6 +84,20 @@ def latest_items_file():
     if not files:
         sys.exit("No items_*.json found. Run collect.py first.")
     return files[-1]
+
+
+def _interleave(items):
+    """Round-robin across collectors (queries/feeds) so every topic is represented
+    before the candidate cap, instead of front-loading whichever query returned first.
+    Without this, the first two Google News queries alone fill the cap and later
+    regions (Lebanon, Yemen, ...) never reach the model."""
+    groups = OrderedDict()
+    for it in items:
+        groups.setdefault(it.get("collector") or "?", []).append(it)
+    ordered = []
+    for row in zip_longest(*groups.values()):
+        ordered.extend(it for it in row if it is not None)
+    return ordered
 
 
 def _generate(client, model, slim, date_label):
@@ -115,9 +134,10 @@ def build_brief():
     items_path = latest_items_file()
     items = json.loads(items_path.read_text(encoding="utf-8"))
 
-    # Trim payload: keep the fields the model needs, cap the count.
+    # Interleave across topics, then trim: keep the fields the model needs, cap the count.
+    pool = _interleave(items)
     slim = [{"title": it["title"], "source": it["source"], "url": it["url"]}
-            for it in items[:MAX_CANDIDATES]]
+            for it in pool[:MAX_CANDIDATES]]
 
     today = datetime.now(timezone.utc)
     date_label = f"{today.month}/{today.day}"
@@ -142,9 +162,23 @@ def build_brief():
         if i < len(attempts):
             print(f"  [validate] regenerating with {attempts[i]} ...")
     else:
-        raise RuntimeError(
-            f"Brief failed validation after {len(attempts)} attempts: {last_critical}"
-        )
+        # Retries exhausted. Rather than hard-fail the whole run, repair the last
+        # attempt by dropping only the bullets with unverifiable links (upholds
+        # SOURCE-OR-SKIP), then ship if the remainder is still a usable brief.
+        repaired = validate.repair_brief(brief_md, slim)
+        rc, rw = validate.validate_brief(repaired, slim)
+        blocking = [c for c in rc if "not in the collected input" not in c]
+        if repaired and not blocking:
+            for w in rw:
+                print(f"  [validate] warning (post-repair): {w}")
+            print(f"  [validate] repaired after {len(attempts)} attempts "
+                  f"(dropped items with unverifiable links)")
+            brief_md = repaired
+        else:
+            raise RuntimeError(
+                f"Brief failed validation after {len(attempts)} attempts and repair: "
+                f"{last_critical}"
+            )
 
     out_path = OUT_DIR / f"brief_{today.strftime('%Y-%m-%d')}.md"
     out_path.write_text(brief_md, encoding="utf-8")

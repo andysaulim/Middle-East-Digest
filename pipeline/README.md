@@ -32,8 +32,13 @@ stronger one:
 - **Prestige** — the formatter prompt requires strong outlets (WSJ, NYT, FT, Reuters, AP,
   Bloomberg, The Economist, WaPo, specialists) to be preferred when they reported a story.
 
-Warnings (item count outside 12–25, use of "claim", no prestige outlet in the input) are
-logged but do not block delivery.
+If all retries fail, the tool repairs the last draft — dropping only the bullets with
+unverifiable links — instead of failing the whole run. Warnings (item count outside 15–40,
+use of "claim", no prestige outlet in the input) are logged but do not block delivery.
+
+**Coverage:** `digest.py` interleaves candidates across the collection queries before the
+`MAX_CANDIDATES` cap, so every region is represented instead of the cap being filled by the
+first one or two queries. Add or retune queries in `collect.py`'s `GOOGLE_NEWS_QUERIES`.
 
 Each file maps to a phase of the build plan and mirrors the Korea Daily Brief structure,
 so this is a fork of a proven design, not a new invention.
