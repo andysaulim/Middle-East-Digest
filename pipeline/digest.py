@@ -96,8 +96,12 @@ Produce the day's brief. Steps:
    - Put the source hyperlink on the reporting verb, Markdown style: [said](url).
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
      use "claim" to imply doubt.
-   - Add an indented sub-bullet for a direct quote, a casualty or transit figure, or a
-     load-bearing follow-on detail. Keep specific numbers (counts, tolls, percentages).
+   - Each item may include a "summary" with extra sourced detail. For a significant story,
+     add one to three indented sub-bullets drawn from the item's title or summary: a direct
+     quote, a casualty or transit figure, an added condition, or a load-bearing follow-on
+     fact. Keep specific numbers (counts, tolls, percentages). Use ONLY facts present in that
+     item's title or summary; never add detail from your own knowledge. If the summary adds
+     nothing past the headline, one bullet is right — do not pad.
 5. SOURCING: if a cluster has two or more independent outlets, it is corroborated; pick the
    strongest source for the link. If an item rests on a single source and is load-bearing
    (a death toll, a strike, an official position), append ` [single-source]`.
@@ -106,7 +110,8 @@ Produce the day's brief. Steps:
    Economist, The Washington Post, Al Jazeera, or a recognized regional specialist — prefer
    it as the linked source, and do not drop a genuinely significant development they
    reported.
-7. Only use URLs present in the input. Never invent a link or an event not in the input.
+7. Only use URLs present in the input. Never invent a link, a quote, a number, or an event
+   not present in an item's title or summary.
 
 Mechanics: U.S. and U.K. keep periods. Spell out percentages ("42 percent"). Serial comma.
 No em-dashes. Numerals for specific figures.
@@ -221,7 +226,8 @@ def build_brief():
 
     # Interleave across topics, then trim: keep the fields the model needs, cap the count.
     pool = _interleave(items)
-    slim = [{"title": it["title"], "source": it["source"], "url": it["url"]}
+    slim = [{"title": it["title"], "source": it["source"], "url": it["url"],
+             "summary": (it.get("summary") or "")[:600]}
             for it in pool[:MAX_CANDIDATES]]
 
     today = datetime.now(timezone.utc)
