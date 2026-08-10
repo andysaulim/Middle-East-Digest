@@ -34,6 +34,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import resolve
+import social
 
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -334,6 +335,8 @@ def collect():
         items += from_rss(name, url, filter_relevant=True)
     print("GDELT:")
     items += from_gdelt(GDELT_QUERY, days=days)
+    print("Social (X + Truth Social):")
+    items += social.collect_social(days=days)
     manual = from_manual()
     if manual:
         print("Manual injection:")

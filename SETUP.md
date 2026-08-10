@@ -164,11 +164,17 @@ The tool uses free, public, keyless sources, so there are no paid subscriptions 
   article links, not just its thin headline feed.
 - **Direct outlet feeds**, filtered to relevant items: Times of Israel and Al Arabiya.
 - **GDELT**, a global news-event database, as a backbone to catch events the searches miss.
-- **Manual additions (the social bridge).** Primary posts that no free scraper reaches —
-  CENTCOM, UKMTO, and the IDF on X, named spokesmen, Trump on Truth Social, a YouTube
-  clip — can be added by hand: paste a few `{source, title, link}` entries into a small file
-  (`pipeline/data/manual.json`) and the next run folds them into the brief. This is the
-  cheap stand-in for a paid social feed.
+- **Social feeds (X and Truth Social), automatically.** The tool now pulls a watchlist of
+  primary accounts without any paid key: **X** posts through the public syndication feed that
+  powers embedded timelines (CENTCOM, UKMTO, the IDF, maritime trackers), and **Truth Social**
+  through its Mastodon-based public API (Trump's posts, which stay viewable without a login).
+  The watchlist is editable in `pipeline/social.py`. These use unofficial public endpoints, so
+  they can be blocked or change without notice — when that happens the tool logs it and leans
+  on the manual file below.
+- **Manual additions (the fallback).** Any primary post the automatic pull misses — a
+  particular tweet, a Truth Social post, a YouTube clip — can still be added by hand: paste a
+  few `{source, title, link}` entries into `pipeline/data/manual.json` and the next run folds
+  them in.
 
 A keyword filter (Iran, Tehran, Hormuz, Houthi, IRGC, Hezbollah, Lebanon, Israel, IDF, Yemen,
 Saudi, Iraq, Syria, Jordan, Egypt, Caspian, tanker, strait, nuclear, and others) keeps the
@@ -201,8 +207,15 @@ means the tool never needs access to the team distribution list itself.
 Every article the tool collects is saved to a running archive (a small database that lives in
 the repository). Over time this becomes something an email thread never could: a queryable
 record of the whole beat. It lets us answer questions like how tanker incidents, Strait of
-Hormuz mentions, or casualty tallies trend week over week. This archive is what will power the
-planned weekly rollups and trend lines. It grows automatically; no one has to maintain it.
+Hormuz mentions, or casualty tallies trend week over week. It grows automatically; no one has
+to maintain it.
+
+**The Friday "Week in Review."** This archive now powers a second, weekly brief. Every Friday
+afternoon the tool reads the last seven days, tallies the week's activity (strikes,
+tanker/maritime incidents, casualties, Hormuz and Red Sea mentions, and more), and has Claude
+synthesize the arc of the week in the same house style, ending with an exact "By the numbers
+this week" block. It is delivered the same way as the daily brief, for the same reviewer to
+send.
 
 ## 9. What it does not do yet, and the roadmap
 
@@ -217,13 +230,17 @@ Being honest about the current limits:
   Jazeera surface much of the rest secondhand. Fully automated social is a planned addition.
 - **Some feeds are occasionally unavailable.** A source that blocks automated requests or rate
   limits is skipped for that run; the draft is built from whatever came through. The tool logs
-  what it skipped.
-- **Delivery is a simple self-email for now.** A cleaner future version can create a real
-  Outlook draft directly in the mailbox via Microsoft's email API, instead of sending an email
-  to yourself.
+  what it skipped. This applies to the free X and Truth Social pulls too, which use public but
+  unofficial endpoints and can be blocked — the manual file is the fallback whenever they are.
+- **Delivery defaults to email.** The tool emails the draft (Gmail today). It can also create a
+  real editable draft directly in an Outlook mailbox via Microsoft Graph, once CSIS IT
+  registers the app that allows it (see [Section 11](#11-administrator-setup-one-time)); until
+  then, Gmail remains the default and nothing else changes.
 
-Roadmap, in rough order: a paid X/social feed to automate the manual step, the Microsoft
-Outlook-draft delivery, and automated weekly rollups built on the archive.
+Now built (previously on the roadmap): free automated X and Truth Social pulls, the weekly
+"Week in Review" rollup, and the Outlook-draft delivery path (pending the IT app
+registration). Still ahead: a paid social feed to make the X/Truth Social pull fully reliable,
+and richer archive-driven trend charts.
 
 ## 10. Who does what
 
@@ -243,9 +260,9 @@ of saved values.
 **Step 1 — Add repository secrets.** In the repository, go to Settings, then Secrets and
 variables, then Actions, then the Secrets tab, and add:
 
-`ANTHROPIC_API_KEY` is always required. For delivery, use **either** the Gmail set (the same
-secrets as the Korea and Japan digests — recommended if you already run those) **or** the
-generic-SMTP set.
+`ANTHROPIC_API_KEY` is always required. For delivery, use the Gmail set (the same secrets as
+the Korea and Japan digests — recommended if you already run those), the generic-SMTP set, or
+the Outlook/Microsoft Graph set (see Step 1b).
 
 | Secret | Required? | What it is |
 | --- | --- | --- |
@@ -260,15 +277,37 @@ generic-SMTP set.
 | `SMTP_USER` | Generic SMTP | The email address the draft is sent from, and the login name. |
 | `SMTP_PASS` | Generic SMTP | The password for that account, usually an app password. |
 
-If both sets are present, Gmail is used. If neither is, the run still builds and archives the
-brief and keeps it as a downloadable artifact; it just does not email it.
+The first delivery method that is fully configured wins (Outlook, then Gmail, then SMTP). If
+none is set, the run still builds and archives the brief and keeps it as a downloadable
+artifact; it just does not email it.
+
+**Step 1b — Optional: Outlook draft delivery (nicer, needs CSIS IT).** Instead of an email,
+the tool can drop a ready-to-send draft straight into an Outlook mailbox via Microsoft Graph.
+This needs your IT team to register an app once:
+
+1. In the CSIS **Entra (Azure AD)** admin center, register a new application.
+2. Grant it the **`Mail.ReadWrite`** *application* permission and click **Grant admin
+   consent**. (Application permission, not delegated, so the scheduled job can run unattended.)
+3. Create a **client secret** for the app.
+4. Add these four repository secrets:
+
+| Secret | What it is |
+| --- | --- |
+| `MS_TENANT_ID` | The CSIS Entra tenant (directory) ID. |
+| `MS_CLIENT_ID` | The registered app's application (client) ID. |
+| `MS_CLIENT_SECRET` | The client secret you created. |
+| `MS_MAILBOX` | The mailbox the draft is created in, e.g. `iran-brief@csis.org`. |
+
+Once all four are set, the draft appears in that mailbox's Drafts each morning; the reviewer
+edits and hits Send. Until they are set, nothing changes and Gmail stays the default.
 
 **Step 2 — Optional variables.** On the Variables tab, you may set `IRAN_BRIEF_MODEL` (the
 fast first-attempt model) and `IRAN_BRIEF_PRIMARY_MODEL` (the stronger model used on a
-validation retry). Leave them unset for sensible defaults. (These are Variables, not Secrets;
-separate tabs.)
+validation retry, and for the weekly rollup). Leave them unset for sensible defaults. (These
+are Variables, not Secrets; separate tabs.)
 
-**Step 3 — That is it.** The weekday-morning schedule is already built into the tool.
+**Step 3 — That is it.** The weekday-morning brief and the Friday "Week in Review" are both
+already scheduled in the tool.
 
 ### Understanding the SMTP settings
 
