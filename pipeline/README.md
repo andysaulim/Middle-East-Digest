@@ -19,7 +19,9 @@ run.py                                                     (daily brief)
  │                                                        → data/items_<date>.json + archive.db
  ├─ digest.py     Claude clusters, selects, formats        → out/brief_<date>.md
  │   ├─ validate.py     checks the draft; regenerates on a stronger model if a CRITICAL check fails
- │   └─ calendar_data.py  appends the curated "Dates ahead" section
+ │   └─ closing sections (appended from source, never the model):
+ │        congress.py (Iran bills via api.congress.gov) + history_data.py ("This day in
+ │        history") + calendar_data.py ("Dates ahead")
  ├─ render.py     Markdown → Outlook-friendly HTML          → out/brief_<date>.html
  └─ deliver.py    Outlook draft (Graph) / Gmail / SMTP, or writes the file in local mode
 
@@ -75,11 +77,12 @@ use of "claim", no prestige outlet in the input) are logged but do not block del
 `MAX_CANDIDATES` cap, so every region is represented instead of the cap being filled by the
 first one or two queries. Add or retune queries in `collect.py`'s `GOOGLE_NEWS_QUERIES`.
 
-**Every country, every day:** after validation, `digest.py` guarantees all standard
-headers are present in a fixed order (US, Iran, Lebanon, Israel, Yemen / Saudi Arabia,
-Oman, Iraq, Egypt, Jordan, Syria, Caspian Sea, General). A country with no news shows
-`No developments reported.` rather than disappearing, so the reader can tell "quiet" from
-"missed." Edit the `CATEGORIES` list in `digest.py` to change the set.
+**Every section, every day:** after validation, `digest.py` guarantees all standard
+headers are present in a fixed order — the human tracker's six: US, Iran, Lebanon, Israel,
+Saudi Arabia/Yemen/Iraq (one combined Gulf/Iraq header), and General. Other countries
+(Oman, Egypt, Jordan, Syria, Caspian) fold into General or the combined header via
+`_ALIASES`. A section with no news shows `Nothing to Report.` rather than disappearing, so
+the reader can tell "quiet" from "missed." Edit `CATEGORIES` / `_ALIASES` in `digest.py`.
 
 **Dates ahead:** `calendar_data.py` holds a curated list of upcoming anniversaries and
 deadlines and appends the ones falling in the next ~45 days as a "Dates ahead" section.

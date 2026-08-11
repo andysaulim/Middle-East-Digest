@@ -43,7 +43,7 @@ X_HANDLES = [
     "CENTCOM",         # U.S. Central Command
     "IDF",             # Israel Defense Forces
     "UKMTO",           # UK Maritime Trade Operations (Strait of Hormuz advisories)
-    "Windward_Ltd",    # maritime-domain analytics
+    "WindwardAI",      # maritime-domain analytics (as cited in the human tracker)
     "MarineTraffic",   # vessel tracking
 ]
 # Truth Social accounts without the @. Unauthenticated pull works for allowed accounts

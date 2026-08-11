@@ -50,8 +50,8 @@ tallies. Synthesize the arc of the week, not a day-by-day list:
 
 1. Open with a 2-4 sentence overview of the week's dominant threads.
 2. Then the most consequential developments as bullets, grouped under the standard regional
-   headers where useful (US, Iran, Lebanon, Israel, Yemen / Saudi Arabia, Iraq, Syria,
-   General). Emphasize what changed over the week and any escalation or de-escalation.
+   headers where useful (US, Iran, Lebanon, Israel, Saudi Arabia/Yemen/Iraq, General).
+   Emphasize what changed over the week and any escalation or de-escalation.
 3. You may link a specific development using ONLY a url present in the input; never invent a
    link, a number, or an event not supported by the headlines. Generalize, do not fabricate.
 

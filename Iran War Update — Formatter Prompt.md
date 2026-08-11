@@ -18,27 +18,30 @@ last 24 hours. Many are duplicate reports of the same event from different outle
    developments. Never omit an active region (Lebanon, Yemen, etc.) just because most of the
    day's volume is about one story. (On Mondays the input covers the whole weekend —
    Saturday, Sunday, and Monday morning — so expect more items.)
-3. **Categorize** each into exactly these headers, **always including every header in this
+3. **Categorize** each into exactly these six headers, **always including every header in this
    order, even when a header has no news**. For a header with no development today, write
-   the header and a single bullet: `- No developments reported.` Never drop a header.
+   the header and a single bullet: `- Nothing to Report.` Never drop a header.
    - US
    - Iran
    - Lebanon
    - Israel
-   - Yemen / Saudi Arabia
-   - Oman
-   - Iraq
-   - Egypt
-   - Jordan
-   - Syria
-   - Caspian Sea
+   - Saudi Arabia/Yemen/Iraq
    - General
+
+   `Saudi Arabia/Yemen/Iraq` is one combined header for the whole Gulf/Iraq theater (Houthi
+   and Red Sea attacks, Saudi Arabia, Yemen, Iraqi militias). Developments elsewhere in the
+   region that do not fit a country header (Oman, Egypt, Jordan, Syria, and the like) go
+   under General.
 4. **Write** each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
    - Put the source hyperlink on the reporting verb, Markdown style: `[said](url)`.
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
      use "claim" to imply doubt.
-   - Add an indented sub-bullet for a direct quote, a casualty or transit figure, or a
-     load-bearing follow-on detail. Keep specific numbers.
+   - Each item may include a `summary` with extra sourced detail. For a significant story,
+     add one to three indented sub-bullets drawn from the item's title or summary: a direct
+     quote, a casualty or transit figure, an added condition, or a load-bearing follow-on
+     fact. Keep specific numbers. Use **only** facts present in that item's title or summary
+     — never add detail from your own knowledge. If the summary adds nothing past the
+     headline, one bullet is right; do not pad.
 5. **Sourcing:** if a cluster has two or more independent outlets, it is corroborated; pick
    the strongest source for the link. If an item rests on a single source and is
    load-bearing (a death toll, a strike, an official position), append ` [single-source]`.
@@ -47,7 +50,8 @@ last 24 hours. Many are duplicate reports of the same event from different outle
    The Economist, The Washington Post, Al Jazeera, or a recognized regional specialist —
    prefer it as the linked source, and do not drop a genuinely significant development that
    they reported.
-7. **Only use URLs present in the input.** Never invent a link or an event not in the input.
+7. **Only use URLs present in the input.** Never invent a link, a quote, a number, or an
+   event not present in an item's title or summary.
 
 The pipeline appends a curated **"Dates ahead"** section (upcoming anniversaries and
 deadlines) after the brief automatically — you do not write it, and you must not invent

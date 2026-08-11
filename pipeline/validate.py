@@ -39,7 +39,9 @@ PRESTIGE = [
 _LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)]+)\)")
 _TOP_BULLET_RE = re.compile(r"^[-*]\s+", re.MULTILINE)   # non-indented bullets only
 _CLAIM_RE = re.compile(r"\bclaim(s|ed|ing)?\b", re.IGNORECASE)
-_NO_NEWS_RE = re.compile(r"^[-*]\s+No developments reported\.?\s*$", re.MULTILINE)
+_NO_NEWS_RE = re.compile(
+    r"^[-*]\s+(No developments reported|Nothing to Report)\.?\s*$",
+    re.IGNORECASE | re.MULTILINE)
 
 
 def extract_urls(md):
