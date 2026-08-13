@@ -132,11 +132,16 @@ and a copy is attached to the run so someone can open and send it manually (see
 The tool is not writing freely. It follows an explicit style specification (the file
 `Iran War Update — Formatter Prompt.md` in the repository). The key rules:
 
-- **Categories, in this fixed order, always shown**: US, Iran, Lebanon, Israel,
-  Saudi Arabia/Yemen/Iraq, General — the same six the human tracker uses, with the Gulf/Iraq
-  theater combined into one header and other countries (Oman, Egypt, Jordan, Syria) folded
-  into General. A section with no news that day shows "Nothing to Report." rather than being
-  dropped.
+- **Section structure.** Four headers are **always shown** in order — US, Iran, Lebanon,
+  Israel — and read "Nothing to Report." when quiet. Thirteen country headers appear **only
+  when they have Iran-war news**, in this order: Bahrain, Egypt, Iraq, Jordan, Kuwait, Oman,
+  Pakistan, Qatar, Saudi Arabia, Syria, Turkey, UAE, Yemen. **General** (always shown) closes
+  the brief with maritime/shipping data and cross-cutting items.
+- **Priorities.** Strikes carry who launched them, the target, timing, stated motivation, and
+  casualties; shipping items carry transit/traffic numbers (Kpler, MarineTraffic, UKMTO) and
+  Strait-of-Hormuz or Bab-el-Mandeb disruptions; the Lebanon-Israel and Saudi-Houthi fronts
+  and official statements are tracked; confirmed high-level meetings are noted, but the
+  contents of a call are omitted unless significant.
 - **One bullet per item**, phrased as "On [Weekday], [actor] [verb] [what happened]."
 - **The source link sits on the reporting verb** (for example, the word "said" or "reported"
   becomes the hyperlink).
@@ -164,22 +169,32 @@ applied consistently from the next run onward.
 The tool uses free, public, keyless sources, so there are no paid subscriptions to maintain:
 
 - **Google News search feeds.** The main relevance engine. The tool runs a set of standing
-  searches, with the real outlet named on each item. The searches cover the Strait of Hormuz,
-  US-Iran negotiations, Houthi and Red Sea shipping, Israel-Lebanon-Hezbollah, Iran's nuclear
-  program and the IRGC, Yemen and Saudi Arabia, the Iran-Oman track, and the wider region
-  (Iraq, Egypt, Jordan, Syria, and the Caspian corridor).
+  searches, with the real outlet named on each item — covering the Strait of Hormuz, US-Iran
+  negotiations, Houthi and Red Sea / Bab-el-Mandeb shipping, Israel-Lebanon-Hezbollah, Iran's
+  nuclear program and the IRGC, the wider region (Iraq, Egypt, Jordan, Syria, Turkey, the
+  Gulf states), and maritime traffic data (Kpler, MarineTraffic). It also runs **site-scoped
+  searches for the named source list** so each named outlet is represented:
+  - *Tier one:* Reuters, Al Jazeera, Axios, The Wall Street Journal, The New York Times.
+  - *Tier two:* The National, L'Orient Today, The Times of Israel, Haaretz, and U.S. Treasury
+    and State Department pages.
+  - *Tier three:* The Washington Post, Asharq Al-Awsat, Syria's SANA, Al-Monitor.
+
+  These tiers also set the tool's preference for which outlet to link when several carry the
+  same story.
 - **Al Jazeera live blog.** The human tracker leans heavily on Al Jazeera's rolling live
   blog, so the tool scrapes Al Jazeera's Middle East section and live blog directly for its
   article links, not just its thin headline feed.
 - **Direct outlet feeds**, filtered to relevant items: Times of Israel and Al Arabiya.
 - **GDELT**, a global news-event database, as a backbone to catch events the searches miss.
-- **Social feeds (X and Truth Social), automatically.** The tool now pulls a watchlist of
-  primary accounts without any paid key: **X** posts through the public syndication feed that
-  powers embedded timelines (CENTCOM, UKMTO, the IDF, maritime trackers), and **Truth Social**
-  through its Mastodon-based public API (Trump's posts, which stay viewable without a login).
-  The watchlist is editable in `pipeline/social.py`. These use unofficial public endpoints, so
-  they can be blocked or change without notice — when that happens the tool logs it and leans
-  on the manual file below.
+- **Social feeds (X and Truth Social), automatically.** The tool pulls a watchlist of primary
+  accounts without any paid key: **X** posts through the public syndication feed that powers
+  embedded timelines, and **Truth Social** through its Mastodon-based public API (Trump's
+  posts, viewable without a login). The watchlist (`pipeline/social.py`) follows the input
+  spec — U.S. officials (CENTCOM, Rubio, Vance, Schumer, Huckabee), Gulf and Arab foreign
+  ministries, Israeli and Iranian leaders, Lebanese officials, and the maritime trackers
+  (UKMTO, Windward, MarineTraffic, Kpler). These use unofficial public endpoints, so a handle
+  can be blocked or return nothing; some handles are best-guesses marked to verify. When a
+  pull fails the tool logs it and leans on the manual file below.
 - **Manual additions (the fallback).** Any primary post the automatic pull misses — a
   particular tweet, a Truth Social post, a YouTube clip — can still be added by hand: paste a
   few `{source, title, link}` entries into `pipeline/data/manual.json` and the next run folds

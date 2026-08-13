@@ -18,20 +18,14 @@ last 24 hours. Many are duplicate reports of the same event from different outle
    developments. Never omit an active region (Lebanon, Yemen, etc.) just because most of the
    day's volume is about one story. (On Mondays the input covers the whole weekend —
    Saturday, Sunday, and Monday morning — so expect more items.)
-3. **Categorize** each into exactly these six headers, **always including every header in this
-   order, even when a header has no news**. For a header with no development today, write
-   the header and a single bullet: `- Nothing to Report.` Never drop a header.
-   - US
-   - Iran
-   - Lebanon
-   - Israel
-   - Saudi Arabia/Yemen/Iraq
-   - General
-
-   `Saudi Arabia/Yemen/Iraq` is one combined header for the whole Gulf/Iraq theater (Houthi
-   and Red Sea attacks, Saudi Arabia, Yemen, Iraqi militias). Developments elsewhere in the
-   region that do not fit a country header (Oman, Egypt, Jordan, Syria, and the like) go
-   under General.
+3. **Categorize.** Always include these four headers, in this order, even with no news:
+   **US, Iran, Lebanon, Israel.** Then include any of these country headers **only if** it
+   has Iran-war-relevant news, in this order: **Bahrain, Egypt, Iraq, Jordan, Kuwait, Oman,
+   Pakistan, Qatar, Saudi Arabia, Syria, Turkey, UAE, Yemen.** End with **General** for
+   maritime/shipping data and cross-cutting items with no single country home.
+   - For an essential header (or General) with no development today, write the header and a
+     single bullet: `- Nothing to Report.`
+   - **Omit** a conditional country header entirely when it has no news — no placeholder.
 4. **Write** each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
    - Put the source hyperlink on the reporting verb, Markdown style: `[said](url)`.
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
@@ -42,15 +36,27 @@ last 24 hours. Many are duplicate reports of the same event from different outle
      fact. Keep specific numbers. Use **only** facts present in that item's title or summary
      — never add detail from your own knowledge. If the summary adds nothing past the
      headline, one bullet is right; do not pad.
-5. **Sourcing:** if a cluster has two or more independent outlets, it is corroborated; pick
+5. **Priorities** — cover these threads thoroughly whenever the input supports them:
+   - **Strikes:** who launched it and what was targeted, the timing, the stated motivation,
+     and the number of injured or killed.
+   - **Shipping:** transit and traffic data (Kpler, MarineTraffic, UKMTO) with the specific
+     numbers, and any disruption to the Strait of Hormuz or the Bab el-Mandeb Strait.
+   - **The Lebanon-Israel front:** Israeli strikes on south Lebanon and statements by senior
+     officials on that front.
+   - **The Saudi-Houthi / Yemen front:** strikes, statements from Houthi, Saudi, and Yemeni
+     government officials, and disruptions to Red Sea / Bab el-Mandeb shipping.
+   - **Statements** by high-ranking officials on the conflict.
+   - **High-level meetings and phone calls:** report confirmed meetings, but do NOT include
+     the contents of a conversation unless the details are significant.
+6. **Sourcing:** if a cluster has two or more independent outlets, it is corroborated; pick
    the strongest source for the link. If an item rests on a single source and is
    load-bearing (a death toll, a strike, an official position), append ` [single-source]`.
-6. **Prestige:** when a development was reported by a strong outlet — The Wall Street
-   Journal, The New York Times, Financial Times, Reuters, The Associated Press, Bloomberg,
-   The Economist, The Washington Post, Al Jazeera, or a recognized regional specialist —
-   prefer it as the linked source, and do not drop a genuinely significant development that
-   they reported.
-7. **Only use URLs present in the input.** Never invent a link, a quote, a number, or an
+7. **Prestige (source tiers):** prefer the strongest available outlet. Tier one — Reuters,
+   Al Jazeera, Axios, The Wall Street Journal, The New York Times. Tier two — The National,
+   L'Orient Today, The Times of Israel, Haaretz, and U.S. Treasury or State Department
+   statements. Tier three — The Washington Post, Asharq Al-Awsat, Syria's SANA, Al-Monitor.
+   Do not drop a genuinely significant development a tier-one or tier-two outlet reported.
+8. **Only use URLs present in the input.** Never invent a link, a quote, a number, or an
    event not present in an item's title or summary.
 
 The pipeline appends a curated **"Dates ahead"** section (upcoming anniversaries and

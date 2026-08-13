@@ -38,13 +38,49 @@ import collect  # reuse _clean, _is_relevant, and the browser UA
 ENABLED = os.environ.get("SOCIAL_FEEDS", "1") not in ("0", "false", "False", "")
 
 # --- Watchlist. EDIT ME. -----------------------------------------------------
-# X handles without the @. Verify each handle is current before relying on it.
+# X handles without the @, from the CSIS input spec. The pull is best-effort: an unknown or
+# renamed handle simply returns nothing, so a wrong guess is harmless. Handles marked
+# "(verify)" are best-known guesses that should be confirmed against x.com.
 X_HANDLES = [
-    "CENTCOM",         # U.S. Central Command
-    "IDF",             # Israel Defense Forces
-    "UKMTO",           # UK Maritime Trade Operations (Strait of Hormuz advisories)
-    "WindwardAI",      # maritime-domain analytics (as cited in the human tracker)
-    "MarineTraffic",   # vessel tracking
+    # U.S. government / officials
+    "CENTCOM",            # U.S. Central Command (checked daily)
+    "SecRubio",           # Marco Rubio, Secretary of State (also @marcorubio)
+    "VP",                 # J.D. Vance, Vice President (also @JDVance)
+    "SenSchumer",         # Chuck Schumer
+    "GovMikeHuckabee",    # Mike Huckabee, U.S. Ambassador to Israel
+    "jaredkushner",       # Jared Kushner (verify; often inactive)
+    # (Massad Boulos and Steve Witkoff have no reliable public X account -> manual file)
+    # Gulf / Arab foreign ministries and officials
+    "MofaQatar_EN",       # Qatar MoFA, English (verify)
+    "mofauae",            # UAE MoFA (verify)
+    "AnwarGargash",       # Anwar Gargash, UAE presidential diplomatic adviser
+    "KSAmofaEN",          # Saudi Arabia MoFA, English (verify)
+    "bahdiplomatic",      # Bahrain MoFA (verify)
+    "KuwaitMFA",          # Kuwait MoFA (verify)
+    "ForeignMinistry",    # Jordan MoFA (verify)
+    "iraqimofa",          # Iraq MoFA (verify)
+    "FMofOman",           # Oman MoFA (verify)
+    "badralbusaidi",      # Badr Albusaidi, Oman Foreign Minister (verify)
+    "PakPMO",             # Pakistan PM Office (verify)
+    "Nechirvan_Barzani",  # Nechirvan Barzani, KRG President (verify)
+    # Lebanon
+    "LBpresidency",       # Lebanese Presidency (verify)
+    "nawafsalam",         # Nawaf Salam, Lebanese PM (verify)
+    # Israel
+    "IsraeliPM",          # Israel Prime Minister's Office
+    "Israel_katz",        # Israel Katz
+    "bezalelsm",          # Bezalel Smotrich (verify)
+    "itamarbengvir",      # Itamar Ben Gvir (verify)
+    "IDF",                # Israel Defense Forces
+    # Iran
+    "drpezeshkian",       # Masoud Pezeshkian (verify)
+    "ghalibaf_ir",        # Mohammad Bagher Ghalibaf (verify)
+    "araghchi",           # Abbas Araghchi (verify)
+    # Maritime / shipping data
+    "UKMTO",              # UK Maritime Trade Operations (Strait of Hormuz advisories)
+    "WindwardAI",         # maritime-domain analytics
+    "MarineTraffic",      # vessel tracking
+    "Kpler",              # commodity and vessel-flow data
 ]
 # Truth Social accounts without the @. Unauthenticated pull works for allowed accounts
 # (Trump, Vance); others would need a logged-in token and are better left to the manual file.
