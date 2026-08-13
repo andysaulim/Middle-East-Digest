@@ -31,9 +31,17 @@ TARGET_MIN, TARGET_MAX = 15, 40   # house target; outside this is a (non-blockin
 # Strong outlets we want represented when they reported a development. Matched
 # (case-insensitively) against each item's `source` name.
 PRESTIGE = [
-    "wall street journal", "wsj", "new york times", "nyt", "financial times",
-    "ft.com", "reuters", "associated press", "ap news", "bloomberg",
-    "the economist", "washington post", "the guardian", "bbc", "npr",
+    # tier one (CSIS input spec)
+    "reuters", "al jazeera", "axios", "wall street journal", "wsj",
+    "new york times", "nyt",
+    # tier two
+    "the national", "l'orient", "lorient", "times of israel", "haaretz",
+    "treasury", "state department", "state.gov",
+    # tier three
+    "washington post", "asharq", "aawsat", "sana", "al-monitor", "al monitor",
+    # other strong wires
+    "associated press", "ap news", "financial times", "ft.com", "bloomberg",
+    "the economist", "the guardian", "bbc", "npr",
 ]
 
 _LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)]+)\)")

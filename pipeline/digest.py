@@ -48,28 +48,27 @@ PRIMARY_MODEL = os.environ.get("IRAN_BRIEF_PRIMARY_MODEL", "claude-opus-4-8")
 MAX_ATTEMPTS = 3       # 1 fast attempt + up to 2 escalated retries
 MAX_CANDIDATES = 300   # cap items sent to the model (interleaved across topics first)
 
-# Section headers, in the order the human tracker uses them. The Gulf/Iraq theater is one
-# combined header; countries that appear only occasionally (Oman, Egypt, Jordan, Syria, the
-# Caspian) are not standing headers — their items flow into the combined header or General
-# via _ALIASES below, matching the real product.
-CATEGORIES = [
-    "US", "Iran", "Lebanon", "Israel", "Saudi Arabia/Yemen/Iraq", "General",
+# Section structure, per the CSIS input spec. ESSENTIAL headers are ALWAYS shown (with a
+# "Nothing to Report." placeholder when empty). CONDITIONAL country headers appear only when
+# they carry Iran-war-relevant news, in this fixed order. General is the always-shown
+# catch-all (maritime/shipping data and cross-cutting items with no single country home).
+ESSENTIAL = ["US", "Iran", "Lebanon", "Israel"]
+CONDITIONAL = [
+    "Bahrain", "Egypt", "Iraq", "Jordan", "Kuwait", "Oman", "Pakistan",
+    "Qatar", "Saudi Arabia", "Syria", "Turkey", "UAE", "Yemen",
 ]
+CATEGORIES = ESSENTIAL + CONDITIONAL + ["General"]      # canonical output order
+ALWAYS_SHOWN = set(ESSENTIAL) | {"General"}
 NO_NEWS = "- Nothing to Report."
 
-_GULF = "Saudi Arabia/Yemen/Iraq"
-# Aliases the model might emit, mapped to the canonical header. Anything unrecognized falls
-# to General (see ensure_sections), so no real item is ever dropped.
+# Aliases mapping the model's header spellings/variants to a canonical header. Anything
+# unrecognized falls to General (see ensure_sections), so no real item is ever dropped.
 _ALIASES = {
-    "unitedstates": "US", "usa": "US",
-    # the combined Gulf/Iraq theater, however the model splits or spells it
-    "saudiarabiayemeniraq": _GULF, "yemensaudiarabiairaq": _GULF,
-    "yemensaudiarabia": _GULF, "saudiarabiayemen": _GULF,
-    "yemen": _GULF, "saudiarabia": _GULF, "saudi": _GULF, "iraq": _GULF,
-    "gulf": _GULF, "redsea": _GULF,
-    # occasional countries fold into General
-    "oman": "General", "egypt": "General", "jordan": "General",
-    "syria": "General", "caspian": "General", "caspiansea": "General",
+    "unitedstates": "US", "usa": "US", "unitedstatesofamerica": "US",
+    "unitedarabemirates": "UAE",
+    "ksa": "Saudi Arabia", "saudi": "Saudi Arabia", "kingdomofsaudiarabia": "Saudi Arabia",
+    "turkiye": "Turkey",
+    "houthi": "Yemen", "houthis": "Yemen",   # Saudi-Houthi front reports under Yemen
 }
 
 SYSTEM_PROMPT = """\
@@ -84,14 +83,14 @@ Produce the day's brief. Steps:
    trivia. Be COMPREHENSIVE: aim for roughly 15-40 real items across the whole brief, and
    cover every region that has real developments. Never omit an active region (Lebanon,
    Yemen, etc.) just because most of the day's volume is about one story (e.g. Hormuz).
-3. CATEGORIZE into exactly these six headers, ALWAYS including EVERY header in this exact
-   order, even when a header has no news:
-   US, Iran, Lebanon, Israel, Saudi Arabia/Yemen/Iraq, General.
-   "Saudi Arabia/Yemen/Iraq" is one combined header covering the whole Gulf/Iraq theater
-   (Houthi and Red Sea attacks, Saudi Arabia, Yemen, Iraqi militias). Developments in Oman,
-   Egypt, Jordan, Syria, or elsewhere in the region that do not fit a country header go under
-   General. For a header with no genuine development today, write the header followed by a
-   single bullet exactly: "- Nothing to Report." Do not drop any header.
+3. CATEGORIZE under these headers. ALWAYS include these four, in this order, even with no
+   news: US, Iran, Lebanon, Israel. Then include any of these country headers ONLY IF they
+   have Iran-war-relevant news, in this exact order: Bahrain, Egypt, Iraq, Jordan, Kuwait,
+   Oman, Pakistan, Qatar, Saudi Arabia, Syria, Turkey, UAE, Yemen. End with General for
+   maritime/shipping data and cross-cutting items that have no single country home. For an
+   essential header (or General) with no development today, write the header followed by a
+   single bullet exactly: "- Nothing to Report." OMIT a conditional country header entirely
+   when it has no news — do not write a placeholder for it.
 4. WRITE each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
    - Put the source hyperlink on the reporting verb, Markdown style: [said](url).
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
@@ -102,15 +101,28 @@ Produce the day's brief. Steps:
      fact. Keep specific numbers (counts, tolls, percentages). Use ONLY facts present in that
      item's title or summary; never add detail from your own knowledge. If the summary adds
      nothing past the headline, one bullet is right — do not pad.
-5. SOURCING: if a cluster has two or more independent outlets, it is corroborated; pick the
+5. PRIORITIES — cover these threads thoroughly whenever the input supports them:
+   - Strikes: name who launched it and what was targeted, the timing, the stated motivation,
+     and the number of injured or killed.
+   - Shipping: transit and traffic data (Kpler, MarineTraffic, UKMTO) with the specific
+     numbers, and any disruption to the Strait of Hormuz or the Bab el-Mandeb Strait.
+   - The Lebanon-Israel front: Israeli strikes on south Lebanon and statements by senior
+     officials on that front.
+   - The Saudi-Houthi / Yemen front: strikes, statements from Houthi, Saudi, and Yemeni
+     government officials, and disruptions to Red Sea / Bab el-Mandeb shipping.
+   - Statements by high-ranking officials on the conflict.
+   - High-level meetings and phone calls: report confirmed meetings, but do NOT include the
+     contents of a conversation unless the details are significant.
+6. SOURCING: if a cluster has two or more independent outlets, it is corroborated; pick the
    strongest source for the link. If an item rests on a single source and is load-bearing
    (a death toll, a strike, an official position), append ` [single-source]`.
-6. PRESTIGE: when a development was reported by a strong outlet — The Wall Street Journal,
-   The New York Times, Financial Times, Reuters, The Associated Press, Bloomberg, The
-   Economist, The Washington Post, Al Jazeera, or a recognized regional specialist — prefer
-   it as the linked source, and do not drop a genuinely significant development they
+7. PRESTIGE (source tiers): prefer the strongest available outlet for each link. Tier one —
+   Reuters, Al Jazeera, Axios, The Wall Street Journal, The New York Times. Tier two — The
+   National, L'Orient Today, The Times of Israel, Haaretz, and U.S. Treasury or State
+   Department statements. Tier three — The Washington Post, Asharq Al-Awsat, Syria's SANA,
+   Al-Monitor. Do not drop a genuinely significant development a tier-one or tier-two outlet
    reported.
-7. Only use URLs present in the input. Never invent a link, a quote, a number, or an event
+8. Only use URLs present in the input. Never invent a link, a quote, a number, or an event
    not present in an item's title or summary.
 
 Mechanics: U.S. and U.K. keep periods. Spell out percentages ("42 percent"). Serial comma.
@@ -152,8 +164,9 @@ def _header_name(line):
 
 
 def ensure_sections(brief_md):
-    """Guarantee every standard header is present, in canonical order, filling any header
-    that has no items with the "Nothing to Report." placeholder.
+    """Enforce the section structure: the four ESSENTIAL headers (and General) are always
+    present, in canonical order, filling any empty one with the "Nothing to Report."
+    placeholder; a CONDITIONAL country header is emitted only when it has news.
 
     Reorders the model's sections into CATEGORIES order. Content under an unrecognized
     header flows into General rather than being dropped, so no real item is lost."""
@@ -181,6 +194,8 @@ def ensure_sections(brief_md):
     out = [title]
     for c in CATEGORIES:
         content = [ln for ln in sections.get(c, []) if ln.strip()]
+        if not content and c not in ALWAYS_SHOWN:
+            continue   # conditional country with no news is omitted entirely
         out.append("")
         out.append(f"**{c}**")
         out.extend(content if content else [NO_NEWS])

@@ -49,9 +49,16 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
 # Sources whose duplicate is preferred when the same story appears twice (matched against
 # the item's source/collector). Canonical publisher wins over a Google News redirect.
 PRESTIGE_HINTS = [
-    "reuters", "associated press", "ap news", "wall street journal", "wsj",
-    "new york times", "nyt", "financial times", "bloomberg", "washington post",
-    "the economist", "bbc", "al jazeera", "axios", "guardian",
+    # tier one
+    "reuters", "al jazeera", "axios", "wall street journal", "wsj", "new york times", "nyt",
+    # tier two
+    "the national", "l'orient", "lorient", "times of israel", "haaretz",
+    "treasury", "state department", "state.gov",
+    # tier three
+    "washington post", "asharq", "aawsat", "sana", "al-monitor", "al monitor",
+    # other strong wires kept for dedupe preference
+    "associated press", "ap news", "financial times", "bloomberg", "the economist",
+    "bbc", "guardian",
 ]
 
 # --- Source configuration -------------------------------------------------
@@ -76,9 +83,27 @@ GOOGLE_NEWS_QUERIES = [
     "Jordan Israel Iran airspace drones",
     "Syria Israel strike Iran militia",
     "Caspian Sea Iran Russia corridor",
-    # Outlet-focused fallbacks (reach ToI even when its direct feed 403s):
+    # Maritime / shipping data (Kpler, MarineTraffic, Bab el-Mandeb):
+    "Kpler Iran oil exports Hormuz blockade",
+    "MarineTraffic Strait of Hormuz transit vessels",
+    "Bab el-Mandeb shipping Houthi Red Sea disruption",
+    # Tier-1/2/3 outlets, site-scoped so each named source is represented (the CSIS input
+    # spec's source list). Google News still lists paywalled outlets; resolve.py canonicalizes.
     "Iran war site:aljazeera.com",
+    "Iran OR Hormuz site:reuters.com",
+    "Iran OR Israel site:axios.com",
+    "Iran OR Israel site:wsj.com",
+    "Iran OR Israel OR Lebanon site:nytimes.com",
+    "Iran OR Lebanon OR Gulf site:thenationalnews.com",
+    "Lebanon OR Israel OR Iran site:lorientlejour.com",
     "Iran OR Hezbollah OR Houthi site:timesofisrael.com",
+    "Iran OR Israel OR Lebanon site:haaretz.com",
+    "Iran OR Israel site:washingtonpost.com",
+    "Iran OR Gulf site:english.aawsat.com",
+    "Iran OR Syria site:sana.sy",
+    "Iran OR Gulf site:al-monitor.com",
+    "Iran sanctions site:home.treasury.gov",
+    "Iran OR Middle East site:state.gov",
 ]
 
 # Al Jazeera pages scraped for canonical article links (the live blog is under /news/liveblog/).
@@ -97,9 +122,14 @@ DIRECT_FEEDS = [
 KEYWORDS = [
     "iran", "tehran", "hormuz", "houthi", "irgc", "hezbollah", "lebanon",
     "israel", "idf", "yemen", "saudi", "tanker", "strait", "araghchi",
-    "pezeshkian", "oman", "red sea", "bab el mandeb", "nuclear", "blockade",
-    "netanyahu", "unifil", "centcom", "iraq", "syria", "jordan", "egypt",
+    "pezeshkian", "oman", "red sea", "bab el mandeb", "bab-el-mandeb", "nuclear",
+    "blockade", "netanyahu", "unifil", "centcom", "iraq", "syria", "jordan", "egypt",
     "suez", "caspian", "gulf", "khamenei", "nasrallah", "beirut",
+    # countries added by the CSIS input spec
+    "bahrain", "kuwait", "qatar", "doha", "uae", "emirates", "abu dhabi", "dubai",
+    "pakistan", "turkey", "turkish", "ghalibaf", "katz", "smotrich", "ben gvir",
+    # maritime data providers
+    "kpler", "marinetraffic",
 ]
 
 GDELT_QUERY = '(Iran (Hormuz OR Houthi OR nuclear OR strike))'
