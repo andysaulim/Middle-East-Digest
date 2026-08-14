@@ -56,7 +56,7 @@ With no SMTP variables set, `deliver.py` runs in local mode: it writes
 ## Scheduled run (GitHub Actions)
 
 The workflow at [`.github/workflows/iran-brief.yml`](.github/workflows/iran-brief.yml) runs
-weekdays at 11:30 UTC (7:30 AM ET during EDT) and can also be triggered by hand from the
+weekdays at 13:00 UTC (9:00 AM ET during EDT) and can also be triggered by hand from the
 **Actions** tab. Each run uploads the brief as a downloadable artifact and commits the
 SQLite archive so trends persist.
 
