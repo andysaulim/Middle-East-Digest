@@ -59,7 +59,7 @@ the Iran and wider Middle East beat, so the design is already road-tested.
 
 ## 3. The big picture: what happens each morning
 
-Every weekday at about 9:00 AM Eastern, without anyone doing anything, the tool:
+Every weekday at about 10:00 AM Eastern, without anyone doing anything, the tool:
 
 1. **Collects** the last 24 hours of Iran-war news from free, public sources.
 2. **Clusters and writes** a draft: it groups duplicate reports of the same event, drops
