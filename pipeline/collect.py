@@ -16,7 +16,7 @@ and writes both a dated JSON file (for the digest step) and a SQLite archive (th
 queryable corpus).
 
 Lookback window: 1 day on Tue-Fri, 3 days on Monday so the Monday brief carries the
-weekend (Saturday, Sunday, and Monday morning up to the ~7am ET send). Override with the
+weekend (Saturday, Sunday, and Monday morning up to the ~9am ET send). Override with the
 LOOKBACK_DAYS env var after a holiday.
 
 Stdlib only.
@@ -170,7 +170,7 @@ def _lookback_days():
     override = os.environ.get("LOOKBACK_DAYS")
     if override and override.isdigit():
         return int(override)
-    # Monday == 0. The cron runs ~7:30am ET, so the UTC weekday matches the ET day.
+    # Monday == 0. The cron runs 13:00 UTC (~9am ET), so the UTC weekday matches the ET day.
     return 3 if datetime.now(timezone.utc).weekday() == 0 else 1
 
 
