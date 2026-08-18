@@ -6,16 +6,19 @@ and drops a ready-to-send draft in a reviewer's inbox. A human still glances and
 
 **Delivery mode:** auto-draft, you send. The pipeline emails the finished brief to one
 reviewer, not to the team list.
-**Sources:** free RSS + Google News + Al Jazeera live blog + GDELT (no paid keys). Primary
-social (X, Truth Social) comes in through a manual injection file until a paid API is added.
+**Sources:** free RSS + Google News + Al Jazeera live blog + GDELT + social (X, Truth Social)
++ subscriber-only newsletters read over IMAP (no paid keys).
 
 ## Pipeline
 
 ```
 run.py                                                     (daily brief)
- ├─ collect.py    Google News RSS + Al Jazeera live blog + outlet feeds + GDELT + social + manual
- │   ├─ resolve.py   turns Google News redirect links into real publisher URLs (cached)
- │   └─ social.py    pulls X (syndication) + Truth Social (Mastodon API), no paid key
+ ├─ collect.py    Google News + Al Jazeera + outlet feeds + GDELT + social + newsletters + manual
+ │   ├─ resolve.py      Google News redirect links → real publisher URLs (cached)
+ │   ├─ social.py       X (syndication) + Truth Social (Mastodon API), no paid key
+ │   ├─ newsletters.py  reads the 3 subscriber newsletters from Gmail over IMAP
+ │   ├─ (date filter)   drops items published outside the day's window
+ │   └─ fulltext.py     fetches real article bodies for the top items (beyond the headline)
  │                                                        → data/items_<date>.json + archive.db
  ├─ digest.py     Claude clusters, selects, formats        → out/brief_<date>.md
  │   ├─ validate.py     checks the draft; regenerates on a stronger model if a CRITICAL check fails
@@ -32,7 +35,7 @@ weekly.py                                                  (Friday Week in Revie
 ### Collection window
 
 1 day on Tuesday–Friday; **3 days on Monday** so the Monday brief carries the weekend
-(Saturday, Sunday, and Monday morning up to the ~10am ET send). After a holiday, set the
+(Saturday, Sunday, and Monday morning up to the ~9am ET send). After a holiday, set the
 `LOOKBACK_DAYS` env var to widen the window for one run.
 
 ### Sources and how to extend them
@@ -141,7 +144,7 @@ The first fully-configured style wins; if none is, it falls back to local mode.
    set (`GMAIL_USER`, `GMAIL_APP_PASS`, `DIGEST_TO`) or the generic-SMTP set (`SMTP_HOST`,
    `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `REVIEWER_EMAIL`). Optionally set repo
    **variables** `IRAN_BRIEF_MODEL` and `IRAN_BRIEF_PRIMARY_MODEL`.
-3. The workflow in `.github/workflows/iran-brief.yml` runs weekdays at 14:00 UTC (10:00 AM
+3. The workflow in `.github/workflows/iran-brief.yml` runs weekdays at 13:00 UTC (9:00 AM
    ET) and can also be triggered by hand from the Actions tab. It uploads the brief as a
    downloadable artifact and commits the SQLite archive so trends persist.
 

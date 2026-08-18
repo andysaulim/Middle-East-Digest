@@ -83,6 +83,9 @@ Produce the day's brief. Steps:
    trivia. Be COMPREHENSIVE: aim for roughly 15-40 real items across the whole brief, and
    cover every region that has real developments. Never omit an active region (Lebanon,
    Yemen, etc.) just because most of the day's volume is about one story (e.g. Hormuz).
+   RECENCY: each item carries a "published" date. Include only developments from the covered
+   window (today, or the weekend on a Monday); drop anything clearly older even if it appears
+   in the input, and date each item ("On [Weekday]") from its "published" value, not a guess.
 3. CATEGORIZE under these headers. ALWAYS include these four, in this order, even with no
    news: US, Iran, Lebanon, Israel. Then include any of these country headers ONLY IF they
    have Iran-war-relevant news, in this exact order: Bahrain, Egypt, Iraq, Jordan, Kuwait,
@@ -242,7 +245,8 @@ def build_brief():
     # Interleave across topics, then trim: keep the fields the model needs, cap the count.
     pool = _interleave(items)
     slim = [{"title": it["title"], "source": it["source"], "url": it["url"],
-             "summary": (it.get("summary") or "")[:600]}
+             "published": it.get("published") or "",
+             "summary": (it.get("summary") or "")[:1000]}
             for it in pool[:MAX_CANDIDATES]]
 
     today = datetime.now(timezone.utc)

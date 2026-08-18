@@ -1,22 +1,24 @@
 """
 collect.py — Iran War Update, live collector (Phase 1)
 
-Pulls the day's Iran-war items from free, keyless sources:
+Pulls the day's Iran-war items from free sources:
   1. Google News RSS search queries (the main relevance engine)
   2. Al Jazeera live blog + Middle East section (the human tracker's backbone), scraped
      for canonical article links
   3. Direct outlet RSS feeds (Times of Israel, Al Arabiya), keyword-filtered
   4. GDELT DOC 2.0 API as an event backbone
-  5. A manual injection file for items no scraper reaches (X / Truth Social / YouTube),
-     which an editor drops in by hand
+  5. Social feeds (X + Truth Social) via social.py
+  6. Subscriber-only newsletters read from the Gmail inbox over IMAP (newsletters.py)
+  7. A manual injection file for items no scraper reaches, dropped in by hand
 
-Normalizes everything to a common record, dedupes (preferring prestige / canonical
-sources), canonicalizes Google News redirect links to real publisher URLs (resolve.py),
-and writes both a dated JSON file (for the digest step) and a SQLite archive (the
-queryable corpus).
+Normalizes everything to a common record, drops stale items (published outside the lookback
+window — see _filter_stale), dedupes (preferring prestige / canonical sources), canonicalizes
+Google News redirect links to real publisher URLs (resolve.py), enriches the top items with
+full article text (fulltext.py) so the brief can go beyond the headline, and writes both a
+dated JSON file (for the digest step) and a SQLite archive (the queryable corpus).
 
 Lookback window: 1 day on Tue-Fri, 3 days on Monday so the Monday brief carries the
-weekend (Saturday, Sunday, and Monday morning up to the ~10am ET send). Override with the
+weekend (Saturday, Sunday, and Monday morning up to the ~9am ET send). Override with the
 LOOKBACK_DAYS env var after a holiday.
 
 Stdlib only.
@@ -30,11 +32,14 @@ import sqlite3
 import re
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import resolve
 import social
+import fulltext
+import newsletters
 
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
@@ -170,8 +175,56 @@ def _lookback_days():
     override = os.environ.get("LOOKBACK_DAYS")
     if override and override.isdigit():
         return int(override)
-    # Monday == 0. The cron runs 14:00 UTC (~10am ET), so the UTC weekday matches the ET day.
+    # Monday == 0. The cron runs 13:00 UTC (~9am ET), so the UTC weekday matches the ET day.
     return 3 if datetime.now(timezone.utc).weekday() == 0 else 1
+
+
+_GDELT_DATE_RE = re.compile(r"^\d{8}T\d{6}Z$")
+
+
+def _parse_published(s):
+    """Parse the date formats the collectors produce into an aware UTC datetime, or None.
+
+    Handles RSS pubDate (RFC 822), GDELT seendate (YYYYMMDDTHHMMSSZ), and ISO 8601
+    (including a bare YYYY-MM-DD, treated as midnight UTC). Returns None if unparseable."""
+    s = (s or "").strip()
+    if not s:
+        return None
+    if _GDELT_DATE_RE.match(s):
+        try:
+            return datetime.strptime(s, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    try:                                     # RFC 822 (Fri, 07 Aug 2026 12:00:00 GMT)
+        dt = parsedate_to_datetime(s)
+        if dt is not None:
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError, IndexError):
+        pass
+    try:                                     # ISO 8601, incl. bare date
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
+
+
+def _window_cutoff(days, now=None):
+    """Oldest publish time we keep: a rolling `days`-long window (matches the collectors'
+    own when:Nd / timespan bounds), so week-old items that leak through are dropped."""
+    return (now or datetime.now(timezone.utc)) - timedelta(days=days)
+
+
+def _filter_stale(items, cutoff):
+    """Drop items whose published date is parseable AND older than cutoff. Items with no
+    parseable date are kept (their source is already recency-bounded). Returns (kept, dropped)."""
+    kept, dropped = [], 0
+    for it in items:
+        dt = _parse_published(it.get("published"))
+        if dt is not None and dt < cutoff:
+            dropped += 1
+        else:
+            kept.append(it)
+    return kept, dropped
 
 
 # --- Collectors -----------------------------------------------------------
@@ -239,13 +292,18 @@ def from_aljazeera(source_name, page_url):
         title = re.sub(r"\s+", " ", slug.replace("-", " ")).strip().capitalize()
         if not _is_relevant(title):
             continue
+        # The path carries the publish date (/news/[liveblog/]YYYY/M/D/slug); use it so the
+        # date filter and the model can date these accurately.
+        dm = re.search(r"/(\d{4})/(\d{1,2})/(\d{1,2})/", path)
+        published = (f"{int(dm.group(1)):04d}-{int(dm.group(2)):02d}-{int(dm.group(3)):02d}"
+                     "T12:00:00Z") if dm else ""
         out.append({
             "source": "Al Jazeera",
             "collector": source_name,
             "title": title,
             "url": url,
             "summary": "",
-            "published": "",
+            "published": published,
         })
     print(f"  [aje] {source_name}: {len(out)} items")
     return out
@@ -367,10 +425,18 @@ def collect():
     items += from_gdelt(GDELT_QUERY, days=days)
     print("Social (X + Truth Social):")
     items += social.collect_social(days=days)
+    print("Newsletters (IMAP + web):")
+    items += newsletters.collect_newsletters()
     manual = from_manual()
     if manual:
         print("Manual injection:")
         items += manual
+
+    # Drop stale items: an article whose published date is older than the rolling window
+    # (this is what let a week-old Treasury item slip in). Dateless items are kept.
+    cutoff = _window_cutoff(days)
+    items, dropped = _filter_stale(items, cutoff)
+    print(f"Dropped {dropped} stale items (published before {cutoff:%Y-%m-%d %H:%MZ})")
 
     # Cross-source dedupe by loose title key. On a collision, keep the stronger source
     # (prestige / canonical publisher) over a weaker one (e.g. a Google News redirect).
@@ -397,6 +463,9 @@ def collect():
     # Canonicalize Google News redirect links to real publisher URLs so the model can copy
     # them accurately (fixes SOURCE-OR-SKIP drops) and the brief carries clean links.
     deduped = resolve.resolve_items(deduped)
+
+    # Enrich the top items with real article text so the model can write beyond the headline.
+    deduped = fulltext.enrich(deduped)
 
     con = init_db()
     new = archive(con, deduped, date_str)

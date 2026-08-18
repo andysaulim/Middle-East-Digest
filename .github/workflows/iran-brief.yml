@@ -7,9 +7,8 @@ name: Iran War Update
 
 on:
   schedule:
-    # 14:00 UTC on weekdays. That is 10:00 AM ET during EDT (9:00 AM during EST). Later start
-    # so the brief captures more of the same day's morning news.
-    - cron: "0 14 * * 1-5"
+    # 13:00 UTC on weekdays. That is 9:00 AM ET during EDT (8:00 AM during EST).
+    - cron: "0 13 * * 1-5"
   workflow_dispatch:
 
 # Needed so the "Commit archive" step can push data/archive.db back to the branch.
