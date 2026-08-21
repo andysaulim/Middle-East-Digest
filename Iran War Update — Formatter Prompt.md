@@ -18,6 +18,9 @@ last 24 hours. Many are duplicate reports of the same event from different outle
    developments. Never omit an active region (Lebanon, Yemen, etc.) just because most of the
    day's volume is about one story. (On Mondays the input covers the whole weekend —
    Saturday, Sunday, and Monday morning — so expect more items.)
+   - **Recency:** each item carries a `published` date. Include only developments from the
+     covered window; drop anything clearly older even if it appears in the input, and date
+     each item ("On [Weekday]") from its `published` value, not a guess.
 3. **Categorize.** Always include these four headers, in this order, even with no news:
    **US, Iran, Lebanon, Israel.** Then include any of these country headers **only if** it
    has Iran-war-relevant news, in this order: **Bahrain, Egypt, Iraq, Jordan, Kuwait, Oman,

@@ -7,9 +7,10 @@ name: Iran War Update
 
 on:
   schedule:
-    # 14:00 UTC on weekdays. That is 10:00 AM ET during EDT (9:00 AM during EST). Later start
-    # so the brief captures more of the same day's morning news.
-    - cron: "0 14 * * 1-5"
+    # 12:10 UTC on weekdays = 8:10 AM ET during EDT (7:10 AM during EST). GitHub delays
+    # scheduled runs (often 30-60+ min) and the pipeline itself takes ~15 min, so we start
+    # ~50 min early and off the top of the hour to land the brief around 9:00 AM ET.
+    - cron: "10 12 * * 1-5"
   workflow_dispatch:
 
 # Needed so the "Commit archive" step can push data/archive.db back to the branch.

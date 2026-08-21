@@ -59,7 +59,7 @@ the Iran and wider Middle East beat, so the design is already road-tested.
 
 ## 3. The big picture: what happens each morning
 
-Every weekday at about 10:00 AM Eastern, without anyone doing anything, the tool:
+Every weekday at about 9:00 AM Eastern, without anyone doing anything, the tool:
 
 1. **Collects** the last 24 hours of Iran-war news from free, public sources.
 2. **Clusters and writes** a draft: it groups duplicate reports of the same event, drops
@@ -199,6 +199,22 @@ The tool uses free, public, keyless sources, so there are no paid subscriptions 
   particular tweet, a Truth Social post, a YouTube clip — can still be added by hand: paste a
   few `{source, title, link}` entries into `pipeline/data/manual.json` and the next run folds
   them in.
+- **Newsletters (subscriber-only), read from the inbox.** Three newsletters the team borrows
+  from — Al-Monitor *Middle East Today*, The National *Daily Briefing*, and Semafor *Flagship*
+  — have no public feed, so the tool reads them straight from the email. Each weekday it logs
+  into the Gmail inbox that receives them (over IMAP, reusing the same Gmail credentials it
+  sends with) and pulls the day's issues, extracting their curated links and blurbs. Semafor
+  Flagship also has a public web edition used as a fallback. **One-time setup:** subscribe that
+  inbox to the three newsletters and enable IMAP on the account (see
+  [Section 11](#11-administrator-setup-one-time)). No new secrets. Disable with `NEWSLETTERS=0`.
+- **Full article text (beyond the headline).** After collecting and de-duplicating, the tool
+  fetches the actual article body for the top items and hands that text to the drafting step,
+  so bullets can carry real detail (quotes, figures, context) instead of just the headline.
+  Paywalled outlets (WSJ, NYT, Haaretz, Washington Post) are skipped and keep their feed
+  summary. Best-effort and cached; disable with `FULLTEXT=0`.
+- **Only same-day news.** Every item's publish date is checked against the day's window (today,
+  or the weekend on a Monday), so an old article that slips into a search result is dropped
+  rather than showing up mis-dated in the brief.
 - **U.S. Congress (official Library of Congress feed).** For the "U.S. Congress" section, the
   tool queries the government's own legislative feed (api.congress.gov) for recent bills whose
   title concerns Iran, and links each to its congress.gov page. This needs a free key (see
@@ -334,6 +350,17 @@ This needs your IT team to register an app once:
 
 Once all four are set, the draft appears in that mailbox's Drafts each morning; the reviewer
 edits and hits Send. Until they are set, nothing changes and Gmail stays the default.
+
+**Step 1c — Optional: newsletter ingestion.** To have the brief draw on the Al-Monitor
+*Middle East Today*, The National *Daily Briefing*, and Semafor *Flagship* newsletters, do two
+one-time things on the **Gmail account** named in `GMAIL_USER`:
+
+1. **Subscribe** that inbox to the three newsletters (sign up on each publisher's site).
+2. **Enable IMAP**: Gmail → Settings → *Forwarding and POP/IMAP* → *Enable IMAP* → Save.
+
+No new secrets — the tool reads the inbox with the same `GMAIL_USER` / `GMAIL_APP_PASS` it
+already uses to send. Leave either step undone and the tool simply skips newsletters. (Set the
+repository variable `NEWSLETTERS` to `0` to turn the feature off entirely.)
 
 **Step 2 — Optional variables.** On the Variables tab, you may set `IRAN_BRIEF_MODEL` (the
 fast first-attempt model) and `IRAN_BRIEF_PRIMARY_MODEL` (the stronger model used on a
