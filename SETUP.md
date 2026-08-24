@@ -224,10 +224,17 @@ A keyword filter (Iran, Tehran, Hormuz, Houthi, IRGC, Hezbollah, Lebanon, Israel
 Saudi, Iraq, Syria, Jordan, Egypt, Caspian, tanker, strait, nuclear, and others) keeps the
 mixed-topic feeds on-beat.
 
-**Editing the "Dates ahead" list.** The upcoming-dates section is a hand-maintained list in
-`pipeline/calendar_data.py`. To add an anniversary or a deadline, add one line to that file
-(a month, day, and label); it will appear automatically when the date is within about six
-weeks. Keeping it by hand is deliberate, so the brief never fabricates a date.
+**Editing the "Dates ahead" list.** This section draws on two hand-maintained sources, so
+the brief never fabricates a date:
+- **Anniversaries and fixed dates** live in `pipeline/calendar_data.py` (the Soleimani
+  strike, Nowruz, the JCPOA dates, the embassy seizure, the June 2025 war, and more) — add a
+  month, day, and label and it appears automatically within about eight weeks.
+- **Current war dates** — a negotiation deadline, a ceasefire review, an announced round of
+  talks, an IAEA session — go in `pipeline/data/key_dates.json` as
+  `{"date": "YYYY-MM-DD", "label": "..."}` entries. This is how deadlines, truces, and
+  negotiations reach the brief: drop one in as soon as it's announced, and it shows up (then
+  auto-expires after it passes). These are event-driven, so the tool can't know them in
+  advance — the editor adds them.
 
 **Editing the "This day in history" list.** The historical notes live the same way in
 `pipeline/history_data.py`, keyed by month and day. Add a line under a date and it shows on
