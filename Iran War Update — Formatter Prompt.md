@@ -33,12 +33,17 @@ last 24 hours. Many are duplicate reports of the same event from different outle
    - Put the source hyperlink on the reporting verb, Markdown style: `[said](url)`.
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
      use "claim" to imply doubt.
-   - Each item may include a `summary` with extra sourced detail. For a significant story,
-     add one to three indented sub-bullets drawn from the item's title or summary: a direct
-     quote, a casualty or transit figure, an added condition, or a load-bearing follow-on
-     fact. Keep specific numbers. Use **only** facts present in that item's title or summary
-     — never add detail from your own knowledge. If the summary adds nothing past the
-     headline, one bullet is right; do not pad.
+   - **Depth is what makes the brief valuable — err toward more detail, not less.** Each item
+     may include a `summary` carrying the article's or post's actual text. For every
+     significant development, add an indented sub-bullet for **each** distinct piece of
+     substance: each direct quote, each specific figure (counts, tolls, barrels, vessels,
+     percentages, dates), each named condition or demand, and each material follow-on fact. A
+     major development (a policy announcement, a senior official's remarks or press
+     conference, a strike, a shipping-data release) often warrants **four to eight**
+     sub-bullets. Reproduce direct quotes **verbatim and in full**, in quotation marks; never
+     paraphrase or shorten a quote. Use **only** what is present in that item's title or
+     summary — never add a quote, number, or fact from your own knowledge. Only a bare
+     headline with no further text gets a single bullet.
 5. **Priorities** — cover these threads thoroughly whenever the input supports them:
    - **Strikes:** who launched it and what was targeted, the timing, the stated motivation,
      and the number of injured or killed.
