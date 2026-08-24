@@ -88,6 +88,8 @@ GOOGLE_NEWS_QUERIES = [
     "Jordan Israel Iran airspace drones",
     "Syria Israel strike Iran militia",
     "Caspian Sea Iran Russia corridor",
+    # Al Jazeera Iran-war liveblog (discovery target — resolved to the canonical AJ URL):
+    "Iran war live blog Al Jazeera",
     # Maritime / shipping data (Kpler, MarineTraffic, Bab el-Mandeb):
     "Kpler Iran oil exports Hormuz blockade",
     "MarineTraffic Strait of Hormuz transit vessels",
@@ -115,6 +117,7 @@ GOOGLE_NEWS_QUERIES = [
 ALJAZEERA_PAGES = [
     ("Al Jazeera Middle East", "https://www.aljazeera.com/where/middle-east/"),
     ("Al Jazeera News", "https://www.aljazeera.com/news/"),
+    ("Al Jazeera Iran", "https://www.aljazeera.com/where/iran/"),
 ]
 
 # Direct outlet RSS feeds (mixed-topic; filtered by KEYWORDS below).
@@ -390,8 +393,52 @@ def from_aljazeera_liveblog(page_url):
                 "title": head[:280], "url": url, "summary": body[:2200], "published": "",
             })
 
+    # 3) Last resort: chunk the page's substantial, on-topic paragraphs into pseudo-updates,
+    #    so we still capture liveblog content even if its markup is unfamiliar.
+    if not out:
+        paras = [_clean(re.sub(r"<[^>]+>", " ", p))
+                 for p in re.findall(r"<p[^>]*>(.*?)</p>", html, re.DOTALL | re.IGNORECASE)]
+        paras = [p for p in paras if len(p) >= 60 and _is_relevant(p)]
+        for i in range(0, min(len(paras), 60), 3):
+            chunk = " ".join(paras[i:i + 3])
+            out.append({
+                "source": "Al Jazeera", "collector": "AJ liveblog",
+                "title": chunk[:120], "url": f"{page_url}#c{i}",
+                "summary": chunk[:2200], "published": "",
+            })
+
     print(f"  [aje-live] {page_url.rsplit('/', 1)[-1][:40]}: {len(out)} updates")
     return out
+
+
+def _discover_liveblogs(items, limit=3):
+    """Find the current Al Jazeera Iran-war liveblog URL(s) from several independent sources,
+    so discovery does not hinge on any one of them: a manual override env var, canonical
+    liveblog links already scraped from AJ hub pages, and Google News results (resolved to
+    their real AJ URL). Returns up to `limit` liveblog URLs."""
+    found = []
+
+    def add(u):
+        if u and "aljazeera.com/news/liveblog/" in u and u not in found:
+            found.append(u)
+
+    add((os.environ.get("ALJAZEERA_LIVEBLOG_URL") or "").strip())   # 1) manual override
+    for it in items:                                               # 2) hub-scraped canonical
+        add(it.get("url", ""))
+    for it in items:                                               # 3) Google News -> resolve
+        if len(found) >= limit:
+            break
+        blob = f"{it.get('source', '')} {it.get('collector', '')} {it.get('title', '')}".lower()
+        u = it.get("url", "")
+        if "jazeera" in blob and ("live" in blob or "iran war" in blob) and resolve.is_gnews(u):
+            try:
+                add((resolve.resolve_url(u) or "").strip())
+            except Exception:
+                pass
+
+    print(f"  [aje-live] discovered {len(found)} liveblog URL(s)"
+          + (": " + found[0] if found else ""))
+    return found[:limit]
 
 
 def from_manual():
@@ -501,17 +548,8 @@ def collect():
     for q in GOOGLE_NEWS_QUERIES:
         items += from_google_news(q, days=days)
     print("Al Jazeera:")
-    aj = []
     for name, url in ALJAZEERA_PAGES:
-        aj += from_aljazeera(name, url)
-    items += aj
-    # The Iran-war liveblog is the human tracker's backbone: scrape its per-update text.
-    liveblogs = []
-    for it in aj:
-        if "/liveblog/" in it["url"] and it["url"] not in liveblogs:
-            liveblogs.append(it["url"])
-    for lb in liveblogs[:3]:
-        items += from_aljazeera_liveblog(lb)
+        items += from_aljazeera(name, url)
     print("Direct feeds:")
     for name, url in DIRECT_FEEDS:
         items += from_rss(name, url, filter_relevant=True)
@@ -525,6 +563,12 @@ def collect():
     if manual:
         print("Manual injection:")
         items += manual
+
+    # Al Jazeera Iran-war liveblog — the human tracker's backbone (~77% of its links).
+    # Discover its URL from every source gathered so far, then scrape its per-update text.
+    print("Al Jazeera liveblog:")
+    for lb in _discover_liveblogs(items):
+        items += from_aljazeera_liveblog(lb)
 
     # Drop stale items: an article whose published date is older than the rolling window
     # (this is what let a week-old Treasury item slip in). Dateless items are kept.
