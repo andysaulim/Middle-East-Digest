@@ -3,8 +3,8 @@ collect.py — Iran War Update, live collector (Phase 1)
 
 Pulls the day's Iran-war items from free sources:
   1. Google News RSS search queries (the main relevance engine)
-  2. Al Jazeera live blog + Middle East section (the human tracker's backbone), scraped
-     for canonical article links
+  2. Al Jazeera Middle East section + the Iran-war LIVEBLOG (the human tracker's backbone,
+     ~77% of its links): article links plus each liveblog update's own text and deep link
   3. Direct outlet RSS feeds (Times of Israel, Al Arabiya), keyword-filtered
   4. GDELT DOC 2.0 API as an event backbone
   5. Social feeds (X + Truth Social) via social.py
@@ -309,6 +309,91 @@ def from_aljazeera(source_name, page_url):
     return out
 
 
+def _iter_jsonld(node):
+    """Yield every dict inside a parsed JSON-LD blob (handles @graph and lists)."""
+    if isinstance(node, dict):
+        yield node
+        for v in node.values():
+            yield from _iter_jsonld(v)
+    elif isinstance(node, list):
+        for v in node:
+            yield from _iter_jsonld(v)
+
+
+_JSONLD_RE = re.compile(
+    r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+    re.DOTALL | re.IGNORECASE)
+_H_SPLIT_RE = re.compile(r"(<h[23][^>]*>.*?</h[23]>)", re.DOTALL | re.IGNORECASE)
+
+
+def from_aljazeera_liveblog(page_url):
+    """Scrape one Al Jazeera liveblog for its individual updates (heading + text + time).
+
+    The Iran-war liveblog is the human tracker's backbone (~77% of its links). Each update
+    carries the quotes and figures the brief needs. Prefer the page's LiveBlogPosting JSON-LD
+    (structured: headline, articleBody, datePublished, url per update); fall back to splitting
+    the rendered HTML on update headings. Best-effort — returns [] on any failure."""
+    try:
+        html = _fetch(page_url).decode("utf-8", "ignore")
+    except Exception as e:
+        print(f"  [aje-live] {page_url} ERR: {e!r}")
+        return []
+
+    out, seen = [], set()
+
+    # 1) LiveBlogPosting JSON-LD (most reliable).
+    for m in _JSONLD_RE.finditer(html):
+        try:
+            data = json.loads(m.group(1))
+        except ValueError:
+            continue
+        for node in _iter_jsonld(data):
+            updates = node.get("liveBlogUpdate") if isinstance(node, dict) else None
+            if not isinstance(updates, list):
+                continue
+            for i, up in enumerate(updates):
+                if not isinstance(up, dict):
+                    continue
+                head = _clean(up.get("headline") or up.get("name"))
+                body = _clean(up.get("articleBody") or up.get("description"))
+                url = (up.get("url") or "").strip() or f"{page_url}#u{i}"
+                if url in seen or not (head or body):
+                    continue
+                text = f"{head} {body}".strip()
+                if not _is_relevant(text):
+                    continue
+                seen.add(url)
+                out.append({
+                    "source": "Al Jazeera", "collector": "AJ liveblog",
+                    "title": (head or body)[:280], "url": url,
+                    "summary": body[:2200], "published": up.get("datePublished", ""),
+                })
+
+    # 2) Fallback: split the article region on update headings (h2/h3).
+    if not out:
+        region = html
+        rm = re.search(r"<(article|main)[^>]*>(.*?)</\1>", html, re.DOTALL | re.IGNORECASE)
+        if rm:
+            region = rm.group(2)
+        parts = _H_SPLIT_RE.split(region)
+        for i in range(1, len(parts) - 1, 2):
+            head = _clean(re.sub(r"<[^>]+>", " ", parts[i]))
+            body = _clean(re.sub(r"<[^>]+>", " ", parts[i + 1]))
+            if not head or len(body) < 60 or not _is_relevant(f"{head} {body}"):
+                continue
+            url = f"{page_url}#u{i}"
+            if url in seen:
+                continue
+            seen.add(url)
+            out.append({
+                "source": "Al Jazeera", "collector": "AJ liveblog",
+                "title": head[:280], "url": url, "summary": body[:2200], "published": "",
+            })
+
+    print(f"  [aje-live] {page_url.rsplit('/', 1)[-1][:40]}: {len(out)} updates")
+    return out
+
+
 def from_manual():
     """Editor-supplied items no scraper reaches: X / Truth Social / YouTube links.
 
@@ -416,8 +501,17 @@ def collect():
     for q in GOOGLE_NEWS_QUERIES:
         items += from_google_news(q, days=days)
     print("Al Jazeera:")
+    aj = []
     for name, url in ALJAZEERA_PAGES:
-        items += from_aljazeera(name, url)
+        aj += from_aljazeera(name, url)
+    items += aj
+    # The Iran-war liveblog is the human tracker's backbone: scrape its per-update text.
+    liveblogs = []
+    for it in aj:
+        if "/liveblog/" in it["url"] and it["url"] not in liveblogs:
+            liveblogs.append(it["url"])
+    for lb in liveblogs[:3]:
+        items += from_aljazeera_liveblog(lb)
     print("Direct feeds:")
     for name, url in DIRECT_FEEDS:
         items += from_rss(name, url, filter_relevant=True)

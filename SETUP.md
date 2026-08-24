@@ -181,9 +181,11 @@ The tool uses free, public, keyless sources, so there are no paid subscriptions 
 
   These tiers also set the tool's preference for which outlet to link when several carry the
   same story.
-- **Al Jazeera live blog.** The human tracker leans heavily on Al Jazeera's rolling live
-  blog, so the tool scrapes Al Jazeera's Middle East section and live blog directly for its
-  article links, not just its thin headline feed.
+- **Al Jazeera live blog (the backbone).** About 77 percent of the human tracker's links are
+  the Al Jazeera Iran-war live blog, so the tool now reads the live blog **update by update** —
+  pulling each entry's own text (the quotes, figures, and statements, many of them tweets the
+  live blog itself quotes) and its deep link, not just the top-level article headlines. This
+  is the single biggest source of the brief's detail.
 - **Direct outlet feeds**, filtered to relevant items: Times of Israel and Al Arabiya.
 - **GDELT**, a global news-event database, as a backbone to catch events the searches miss.
 - **Social feeds (X and Truth Social), automatically.** The tool pulls a watchlist of primary
