@@ -32,7 +32,7 @@ import resolve   # is_gnews — skip redirect URLs
 ENABLED = os.environ.get("FULLTEXT", "1") not in ("0", "false", "False", "")
 MAX_ITEMS = 150       # cap fetches per run (now parallel, so this is affordable)
 WORKERS = 8
-BODY_CHARS = 1200     # chars of extracted text to keep per article
+BODY_CHARS = 2200     # chars of extracted text to keep per article (room for full quotes)
 TIMEOUT = 5
 
 # Outlets whose article bodies are paywalled -> take only their meta/og description (which
@@ -104,7 +104,7 @@ def _rank(it):
 
 def _apply(it, body):
     base = it.get("summary") or ""
-    it["summary"] = (f"{base} {body}".strip() if base else body)[:1500]
+    it["summary"] = (f"{base} {body}".strip() if base else body)[:2400]
 
 
 def enrich(items, limit=MAX_ITEMS):

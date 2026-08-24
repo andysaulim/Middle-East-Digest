@@ -98,12 +98,24 @@ Produce the day's brief. Steps:
    - Put the source hyperlink on the reporting verb, Markdown style: [said](url).
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
      use "claim" to imply doubt.
-   - Each item may include a "summary" with extra sourced detail. For a significant story,
-     add one to three indented sub-bullets drawn from the item's title or summary: a direct
-     quote, a casualty or transit figure, an added condition, or a load-bearing follow-on
-     fact. Keep specific numbers (counts, tolls, percentages). Use ONLY facts present in that
-     item's title or summary; never add detail from your own knowledge. If the summary adds
-     nothing past the headline, one bullet is right — do not pad.
+   - DEPTH — this is what makes the brief valuable, so err toward MORE detail, not less.
+     Each item may include a "summary" carrying the article's or post's actual text. For every
+     significant development, add an indented sub-bullet for EACH distinct piece of substance
+     in that text: each direct quote, each specific figure (counts, tolls, barrels, vessels,
+     percentages, dates), each named condition or demand, and each material follow-on fact.
+     A major development — a policy announcement, a senior official's remarks or press
+     conference, a strike, a shipping-data release — often warrants FOUR TO EIGHT sub-bullets.
+     Reproduce direct quotes VERBATIM and in full, in quotation marks; never paraphrase a
+     quote into your own words or shorten it. Use ONLY what is present in that item's title or
+     summary — never add a quote, number, or fact from your own knowledge. Only a genuinely
+     thin item (a bare headline with no further text in its summary) gets a single bullet.
+     Example of the target density for one item:
+       - On Monday, Treasury Secretary Bessent [held](url) a media conference to unveil "D-Day."
+         - "Let there be no ambiguity as to the position of the United States," Bessent said.
+         - He said the U.S. is expanding secondary sanctions to digital assets, technology,
+           gold, aviation, and shipping.
+         - The Treasury has sanctioned nearly 60 entities, individuals, and vessels, he said.
+         - "I'm not going to set a timeline, but we do not have infinite patience here."
 5. PRIORITIES — cover these threads thoroughly whenever the input supports them:
    - Strikes: name who launched it and what was targeted, the timing, the stated motivation,
      and the number of injured or killed.
@@ -273,7 +285,7 @@ def build_brief():
     pool = _interleave(items)
     slim = [{"title": it["title"], "source": it["source"], "url": it["url"],
              "published": it.get("published") or "",
-             "summary": (it.get("summary") or "")[:1000]}
+             "summary": (it.get("summary") or "")[:1800]}
             for it in pool[:MAX_CANDIDATES]]
 
     today = datetime.now(timezone.utc)
