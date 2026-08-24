@@ -214,9 +214,12 @@ def _generate(client, model, slim, date_label):
     # deterministic clustering/formatting task, so no thinking is needed; give the
     # whole budget to the brief. (If a model rejects disabled thinking, e.g. Fable 5,
     # retry without the parameter and rely on a large max_tokens.)
+    # Budget generously: if a model rejects disabled thinking and we fall back to thinking ON,
+    # the reasoning shares this budget with the brief, and 8000 left a bullet truncated
+    # mid-word ("...shipping Sa"). 16000 leaves ample room for the full brief either way.
     create_kwargs = dict(
         model=model,
-        max_tokens=8000,
+        max_tokens=16000,
         system=SYSTEM_PROMPT,
         messages=[{
             "role": "user",
@@ -230,10 +233,34 @@ def _generate(client, model, slim, date_label):
         msg = client.messages.create(**create_kwargs)
     # The model may emit a thinking block before the answer, so content[0] is not
     # necessarily the text. Concatenate every text block and ignore the rest.
-    return "".join(
+    text = "".join(
         getattr(block, "text", "") for block in msg.content
         if getattr(block, "type", None) == "text"
     ).strip()
+    # Belt and suspenders: if the response was cut at the token limit, never ship a
+    # half-finished bullet — drop any incomplete trailing line.
+    if getattr(msg, "stop_reason", None) == "max_tokens":
+        print("  [digest] warning: response hit max_tokens; trimming incomplete tail")
+    return _strip_incomplete_tail(text)
+
+
+_SENTENCE_END = (".", "!", "?", ")", "]", '"', "'", "”", "’", ":")
+
+
+def _strip_incomplete_tail(md):
+    """Drop a trailing bullet that doesn't end in sentence punctuation (a truncated line).
+    House-style bullets always end with '.', so a complete brief is unaffected."""
+    lines = md.rstrip().split("\n")
+    while lines:
+        last = lines[-1].rstrip()
+        if not last:
+            lines.pop()
+            continue
+        if last.lstrip().startswith(("-", "*")) and not last.endswith(_SENTENCE_END):
+            lines.pop()
+            continue
+        break
+    return "\n".join(lines).strip()
 
 
 def build_brief():

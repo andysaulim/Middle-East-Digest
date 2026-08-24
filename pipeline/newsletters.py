@@ -25,20 +25,28 @@ import re
 import urllib.request
 from datetime import datetime, timezone, timedelta
 from email.header import decode_header
+from urllib.parse import urlparse
 
 import collect  # reuse UA, _clean, _is_relevant
 
 ENABLED = os.environ.get("NEWSLETTERS", "1") not in ("0", "false", "False", "")
 IMAP_HOST = "imap.gmail.com"
 
-# Newsletter senders/subjects -> display label. Matched case-insensitively on From + Subject.
-SOURCES = [
-    {"label": "Al-Monitor (Middle East Today)",
-     "match": ["al-monitor", "almonitor", "middle east today"]},
-    {"label": "The National (Daily Briefing)",
-     "match": ["thenationalnews", "the national", "daily briefing"]},
-    {"label": "Semafor (Flagship)",
-     "match": ["semafor", "flagship"]},
+# A newsletter is identified from its sender (publisher) and/or its subject (newsletter name),
+# so whichever ones the inbox is subscribed to are picked up. Add a line to either list to
+# recognize a new one.
+_PUBLISHERS = [
+    ("al-monitor", "Al-Monitor"), ("almonitor", "Al-Monitor"),
+    ("thenationalnews", "The National"), ("thenational", "The National"),
+    ("the national", "The National"), ("semafor", "Semafor"),
+]
+_NEWSLETTERS = [
+    ("middle east today", "Middle East Today"),
+    ("uae today", "UAE Today"),
+    ("editor's briefing", "The Editor's Briefing"),
+    ("editors briefing", "The Editor's Briefing"),
+    ("daily briefing", "Daily Briefing"),
+    ("flagship", "Flagship"),
 ]
 
 # Links that are never article links.
@@ -60,11 +68,37 @@ def _decode(s):
 
 
 def _match_source(frm, subj):
+    """Identify a subscribed newsletter from its sender and/or subject; else None."""
     hay = f"{frm} {subj}".lower()
-    for s in SOURCES:
-        if any(m in hay for m in s["match"]):
-            return s["label"]
+    pub = next((label for key, label in _PUBLISHERS if key in hay), None)
+    name = next((disp for key, disp in _NEWSLETTERS if key in hay), None)
+    if pub and name:
+        return f"{pub} ({name})"
+    if pub:
+        return f"{pub} (Newsletter)"
+    if name:
+        return name
     return None
+
+
+def _looks_like_article(url):
+    """True only for a real article URL, not a homepage/section page (which is why an
+    Al-Monitor link pointed at the site root). Article slugs are long and hyphenated or
+    carry an id; section roots are empty or a short single word."""
+    try:
+        path = urlparse(url).path.rstrip("/")
+    except Exception:
+        return False
+    if not path:
+        return False                                   # homepage
+    low = path.lower()
+    if any(seg in low for seg in
+           ("/newsletters", "/newsletter", "/tag/", "/tags/", "/topics/", "/topic/",
+            "/author/", "/authors/", "/category/", "/categories/", "/subscribe",
+            "/about", "/section/", "/live/", "/video/", "/videos/")):
+        return False
+    last = path.split("/")[-1]
+    return len(last) >= 12 and ("-" in last or any(c.isdigit() for c in last))
 
 
 def _html_part(msg):
@@ -87,6 +121,8 @@ def parse_newsletter_html(html, label, published=""):
         url = m.group(1).strip()
         text = collect._clean(_TAG_RE.sub(" ", m.group(2)))
         if not url.startswith("http") or _SKIP_LINK.search(url):
+            continue
+        if not _looks_like_article(url):       # drop homepage / section links
             continue
         if len(text) < 25:                     # skip "read more", icons, nav
             continue
@@ -164,6 +200,7 @@ if __name__ == "__main__":
     html = """
     <html><body>
     <a href="https://www.al-monitor.com/originals/2026/08/iran-hormuz-deal">Iran and Oman near a deal on Strait of Hormuz shipping lanes</a>
+    <a href="https://www.al-monitor.com/">Al-Monitor reported on Iran and the Strait of Hormuz today</a>
     <a href="https://emailcampaign.al-monitor.com/t/t-e-abc">View in browser</a>
     <a href="https://www.al-monitor.com/unsubscribe">Unsubscribe</a>
     <a href="https://twitter.com/almonitor">Follow us</a>
@@ -171,10 +208,18 @@ if __name__ == "__main__":
     <a href="https://www.al-monitor.com/originals/2026/08/gardening">Ten tips for a better tomato harvest this summer</a>
     </body></html>"""
     items = parse_newsletter_html(html, "Al-Monitor (Middle East Today)")
-    assert len(items) == 1, items                        # only the Iran article survives
+    assert len(items) == 1, items                        # only the real Iran article survives
     assert "Hormuz" in items[0]["title"]
     assert items[0]["url"].endswith("iran-hormuz-deal")
-    assert items[0]["source"].startswith("Al-Monitor")
-    assert all("emailcampaign" not in i["url"] and "unsubscribe" not in i["url"] for i in items)
+    assert all(u["url"] != "https://www.al-monitor.com/" for u in items)   # homepage rejected
+    # article-link filter
+    assert _looks_like_article("https://www.al-monitor.com/originals/2026/08/iran-hormuz-deal")
+    assert not _looks_like_article("https://www.al-monitor.com/")
+    assert not _looks_like_article("https://www.thenationalnews.com/mena/")
+    assert _looks_like_article("https://www.thenationalnews.com/news/mena/2026/08/24/iran-oman-hormuz-talks/")
+    # sender + subject matcher
     assert _match_source("news@semafor.com", "Flagship: the world today") == "Semafor (Flagship)"
+    assert _match_source("newsletters@thenationalnews.com", "Middle East Today") == "The National (Middle East Today)"
+    assert _match_source("noreply@thenationalnews.com", "The Editor's Briefing") == "The National (The Editor's Briefing)"
+    assert _match_source("a@b.com", "random unrelated subject") is None
     print("newsletters.py self-test passed")
