@@ -505,9 +505,12 @@ def from_aljazeera_liveblog(page_url):
         print(f"  [aje-live] {page_url} ERR: {e!r}")
         return []
 
-    out, seen = [], set()
+    out, seen, content_seen = [], set(), set()
+    jsonld_seen = 0
 
-    # 1) LiveBlogPosting JSON-LD (most reliable).
+    # 1) LiveBlogPosting JSON-LD (most reliable). The page was discovered *as* the Iran-war
+    #    liveblog, so its updates are on-topic by construction — do NOT re-filter each update
+    #    against the Iran keyword list (that was dropping most updates and leaving only one).
     for m in _JSONLD_RE.finditer(html):
         try:
             data = json.loads(m.group(1))
@@ -517,27 +520,30 @@ def from_aljazeera_liveblog(page_url):
             updates = node.get("liveBlogUpdate") if isinstance(node, dict) else None
             if not isinstance(updates, list):
                 continue
-            for i, up in enumerate(updates):
+            for up in updates:
                 if not isinstance(up, dict):
                     continue
+                jsonld_seen += 1
                 head = _clean(up.get("headline") or up.get("name"))
                 body = _clean(up.get("articleBody") or up.get("description"))
+                text = f"{head} {body}".strip()
+                if len(text) < 40:                 # skip trivial/procedural updates
+                    continue
                 url = (up.get("url") or "").strip() or \
                     f"{page_url}#u{_content_anchor(head + body)}"
-                if url in seen or not (head or body):
-                    continue
-                text = f"{head} {body}".strip()
-                if not _is_relevant(text):
+                if url in seen:
                     continue
                 seen.add(url)
+                content_seen.add(_content_anchor(head + body))
                 out.append({
                     "source": "Al Jazeera", "collector": "AJ liveblog",
                     "title": (head or body)[:280], "url": url,
                     "summary": body[:2200], "published": up.get("datePublished", ""),
                 })
 
-    # 2) Fallback: split the article region on update headings (h2/h3).
-    if not out:
+    # 2) If JSON-LD was thin (or absent), ALSO split the article region on update headings
+    #    (h2/h3) and merge — deduped by content anchor against what JSON-LD already captured.
+    if len(out) < 5:
         region = html
         rm = re.search(r"<(article|main)[^>]*>(.*?)</\1>", html, re.DOTALL | re.IGNORECASE)
         if rm:
@@ -546,12 +552,16 @@ def from_aljazeera_liveblog(page_url):
         for i in range(1, len(parts) - 1, 2):
             head = _clean(re.sub(r"<[^>]+>", " ", parts[i]))
             body = _clean(re.sub(r"<[^>]+>", " ", parts[i + 1]))
-            if not head or len(body) < 60 or not _is_relevant(f"{head} {body}"):
+            if not head or len(body) < 60:
                 continue
-            url = f"{page_url}#u{_content_anchor(head + body)}"
+            anchor = _content_anchor(head + body)
+            if anchor in content_seen:            # same update already from JSON-LD
+                continue
+            url = f"{page_url}#u{anchor}"
             if url in seen:
                 continue
             seen.add(url)
+            content_seen.add(anchor)
             out.append({
                 "source": "Al Jazeera", "collector": "AJ liveblog",
                 "title": head[:280], "url": url, "summary": body[:2200], "published": "",
@@ -571,7 +581,8 @@ def from_aljazeera_liveblog(page_url):
                 "summary": chunk[:2200], "published": "",
             })
 
-    print(f"  [aje-live] {page_url.rsplit('/', 1)[-1][:40]}: {len(out)} updates")
+    slug = page_url.rsplit('/', 1)[-1][:40]
+    print(f"  [aje-live] {slug}: {len(out)} updates ({jsonld_seen} in JSON-LD)")
     return out
 
 
