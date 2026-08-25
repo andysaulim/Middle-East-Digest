@@ -171,23 +171,41 @@ def _norm_key(title):
     return re.sub(r"[^a-z0-9]", "", (title or "").lower())[:80]
 
 
+_TRACKING_PARAMS = {
+    "ref", "ref_src", "ref_url", "fbclid", "gclid", "mc_cid", "mc_eid", "igshid",
+    "email", "cmpid", "smid", "spm", "src", "s",
+}
+
+
 def _norm_url(url):
-    """Canonical form of a URL for dedupe: scheme/host lowered, tracking query and fragment
-    dropped, trailing slash removed. Two links that point at the same article (or the same
-    liveblog update anchor) collapse to one key. A liveblog update keeps its #anchor because
-    that is what makes each update distinct, so those are preserved."""
+    """Canonical form of a URL for dedupe: scheme/host lowered, trailing slash and *tracking*
+    query params dropped, fragment dropped. Crucially, CONTENT query params are kept — an Al
+    Jazeera liveblog update is identified by its ?update=NNNN param, so stripping the whole
+    query would collapse every update of one liveblog into a single key (and cross-day
+    suppression would then drop all but the first). Only utm_*/ref/email-style trackers are
+    removed. A liveblog update's #anchor is also preserved, for updates keyed that way."""
     u = (url or "").strip()
     if not u:
         return ""
     frag = ""
     if "#" in u:
         u, frag = u.split("#", 1)
-    u = re.sub(r"^https?://", "", u, flags=re.I).lower()
-    u = u.split("?", 1)[0].rstrip("/")
+    base, _, query = u.partition("?")
+    base = re.sub(r"^https?://", "", base, flags=re.I).lower().rstrip("/")
+    kept = []
+    for part in query.split("&"):
+        if not part:
+            continue
+        key = part.split("=", 1)[0].lower()
+        if key.startswith("utm_") or key in _TRACKING_PARAMS:
+            continue
+        kept.append(part)
+    if kept:
+        base = f"{base}?{'&'.join(sorted(kept))}"
     # Keep a liveblog update's anchor (…#…) as part of the key; drop other fragments.
-    if frag and "liveblog" in u:
-        u = f"{u}#{frag.lower()}"
-    return u
+    if frag and "liveblog" in base:
+        base = f"{base}#{frag.lower()}"
+    return base
 
 
 _STOPWORDS = {
@@ -529,12 +547,22 @@ def from_aljazeera_liveblog(page_url):
                 text = f"{head} {body}".strip()
                 if len(text) < 40:                 # skip trivial/procedural updates
                     continue
-                url = (up.get("url") or "").strip() or \
-                    f"{page_url}#u{_content_anchor(head + body)}"
-                if url in seen:
+                anchor = _content_anchor(head + body)
+                if anchor in content_seen:         # dedup by content, not by URL
                     continue
+                # Each update needs a distinct, stable link. Use the update's own URL when it
+                # already distinguishes updates (an ?update= param or a #fragment); otherwise
+                # the feed handed us the bare page URL, so append a content anchor so every
+                # update keeps its own link instead of collapsing to one.
+                raw = (up.get("url") or "").strip()
+                if raw and ("update=" in raw or "#" in raw):
+                    url = raw
+                elif raw:
+                    url = f"{raw}#u{anchor}"
+                else:
+                    url = f"{page_url}#u{anchor}"
+                content_seen.add(anchor)
                 seen.add(url)
-                content_seen.add(_content_anchor(head + body))
                 out.append({
                     "source": "Al Jazeera", "collector": "AJ liveblog",
                     "title": (head or body)[:280], "url": url,
@@ -816,10 +844,14 @@ def _selftest():
     ])
     assert len(d) == 2 and {x["source"] for x in d} == {"Reuters", "AP"}, d
 
-    # URL normalization keeps liveblog update anchors distinct but strips tracking / fragments.
+    # URL normalization keeps liveblog updates distinct — whether keyed by #anchor or by the
+    # ?update= content param — while stripping tracking params and non-liveblog fragments.
     assert _norm_url("https://www.aljazeera.com/news/liveblog/2026/8/25/l#u1") != \
         _norm_url("https://www.aljazeera.com/news/liveblog/2026/8/25/l#u2")
-    assert _norm_url("https://x.com/a/status/1?utm=1#frag") == "x.com/a/status/1"
+    assert _norm_url("https://www.aljazeera.com/news/liveblog/2026/8/24/s?update=4880890") != \
+        _norm_url("https://www.aljazeera.com/news/liveblog/2026/8/24/s?update=4880837")
+    assert _norm_url("https://x.com/a/status/1?ref_src=twsrc&utm_medium=x#frag") == \
+        "x.com/a/status/1"
     print("collect.py self-test passed")
 
 
