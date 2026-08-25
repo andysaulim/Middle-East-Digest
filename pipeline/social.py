@@ -29,8 +29,10 @@ Stdlib only.
 import json
 import os
 import re
+import time
 import urllib.parse
 import urllib.request
+import urllib.error
 from datetime import datetime, timedelta, timezone
 
 import collect  # reuse _clean, _is_relevant, and the browser UA
@@ -298,6 +300,25 @@ def _parse_scraper(data, handle, days, now):
     return out
 
 
+# Pace the scraper: a short gap between accounts and a backoff-retry on HTTP 429, since firing
+# all ~38 handles back-to-back trips twitterapi.io's per-second rate limit (observed live).
+_SCRAPER_GAP = float(os.environ.get("X_SCRAPER_GAP", "0.4"))   # seconds between accounts
+_SCRAPER_RETRIES = 4
+
+
+def _scraper_get(url, key):
+    """GET one scraper URL, retrying on 429 (Too Many Requests) with exponential backoff."""
+    req = urllib.request.Request(url, headers={"X-API-Key": key, "Accept": "application/json"})
+    for attempt in range(_SCRAPER_RETRIES):
+        try:
+            return json.loads(urllib.request.urlopen(req, timeout=15).read())
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt < _SCRAPER_RETRIES - 1:
+                time.sleep(2 ** attempt)          # 1s, 2s, 4s
+                continue
+            raise
+
+
 def from_x_scraper(handles=None, days=1, now=None):
     key = os.environ.get("X_SCRAPER_KEY")
     if not key:
@@ -305,16 +326,17 @@ def from_x_scraper(handles=None, days=1, now=None):
         return []
     handles = X_HANDLES if handles is None else handles
     now = now or datetime.now(timezone.utc)
-    out = []
-    for h in handles:
+    out, errors = [], 0
+    for i, h in enumerate(handles):
+        if i:
+            time.sleep(_SCRAPER_GAP)              # throttle to stay under the rate limit
         try:
             url = f"{_SCRAPER_BASE}/twitter/user/last_tweets?userName={urllib.parse.quote(h)}"
-            req = urllib.request.Request(url, headers={"X-API-Key": key, "Accept": "application/json"})
-            data = json.loads(urllib.request.urlopen(req, timeout=15).read())
-            out += _parse_scraper(data, h, days, now)
+            out += _parse_scraper(_scraper_get(url, key), h, days, now)
         except Exception as e:
+            errors += 1
             print(f"  [x] @{h} ERR: {e!r}")
-    print(f"  [x]: {len(out)} items (paid scraper, {len(handles)} accounts)")
+    print(f"  [x]: {len(out)} items (paid scraper, {len(handles)} accounts, {errors} errors)")
     return out
 
 
