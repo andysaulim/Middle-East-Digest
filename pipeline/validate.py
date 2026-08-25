@@ -67,6 +67,21 @@ def prestige_count(items):
     return n
 
 
+def neutralize_claim(brief_md):
+    """Enforce the house rule against "claim" (which implies doubt) by rewriting it to a
+    neutral reporting verb. Targets only reporting-verb uses — the hyperlinked verb form
+    [claimed](url) and "... claimed/claims that ..." — so genuine nouns ("territorial
+    claims") and idioms ("claimed responsibility") are left untouched."""
+    md = brief_md or ""
+    md = re.sub(r"\[\s*claimed\s*\]", "[said]", md, flags=re.IGNORECASE)
+    md = re.sub(r"\[\s*claims\s*\]", "[says]", md, flags=re.IGNORECASE)
+    md = re.sub(r"\[\s*claiming\s*\]", "[saying]", md, flags=re.IGNORECASE)
+    md = re.sub(r"\[\s*claim\s*\]", "[said]", md, flags=re.IGNORECASE)
+    md = re.sub(r"\bclaimed that\b", "said that", md, flags=re.IGNORECASE)
+    md = re.sub(r"\bclaims that\b", "says that", md, flags=re.IGNORECASE)
+    return md
+
+
 def repair_brief(brief_md, items):
     """Drop top-level bullets whose links are not in the input, keeping the rest.
 
@@ -179,5 +194,18 @@ if __name__ == "__main__":
     assert "fake.example" not in repaired, repaired
     assert "sub-bullet under the bad item" not in repaired, repaired
     assert "example.com/a" in repaired and "example.com/b" in repaired, repaired
+
+    # neutralize_claim rewrites reporting-verb "claim" but leaves nouns/idioms alone
+    nc = neutralize_claim(
+        "- Netanyahu [claimed](u) that Iran struck.\n"
+        "- Tehran claims that sanctions fail.\n"
+        "- The Houthis claimed responsibility for the attack.\n"
+        "- Iran renewed its territorial claims in the Gulf.\n")
+    assert "[said]" in nc and "[claimed]" not in nc, nc
+    assert "says that" in nc and "claims that" not in nc, nc
+    assert "claimed responsibility" in nc, nc          # idiom untouched
+    assert "territorial claims" in nc, nc              # noun untouched
+    assert not _CLAIM_RE.search(nc.replace("claimed responsibility", "")
+                                  .replace("territorial claims", "")), nc
 
     print("validate.py self-test passed")

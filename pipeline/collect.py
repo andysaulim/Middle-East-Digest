@@ -74,6 +74,39 @@ PRESTIGE_HINTS = [
     "bbc", "guardian",
 ]
 
+# Non-news / low-authority domains that leaked into the brief as sole sources (a fighter-jet
+# marketing blog, content aggregators, SEO feeds). Items whose canonical URL is on one of
+# these are dropped before dedupe, so a bullet is never built on them. Keep this list to
+# clearly-not-a-newsroom hosts; genuine outlets belong in the tiers, not here. Editable.
+_JUNK_DOMAINS = {
+    "migflug.com",          # fighter-jet joyride company blog
+    "streamlinefeed.co.ke",  # content aggregator / SEO feed
+    "yemenonline.info",      # low-authority aggregator
+}
+
+
+def _host(url):
+    """Lowercased host of a URL with any leading www. stripped."""
+    try:
+        h = urllib.parse.urlparse(url).netloc.lower()
+    except Exception:
+        return ""
+    return h[4:] if h.startswith("www.") else h
+
+
+def _drop_junk(items):
+    """Drop items whose canonical host is a known non-news / low-authority domain. Returns
+    (kept, dropped)."""
+    kept, dropped = [], 0
+    for it in items:
+        h = _host(it.get("url", ""))
+        if h and any(h == d or h.endswith("." + d) for d in _JUNK_DOMAINS):
+            dropped += 1
+        else:
+            kept.append(it)
+    return kept, dropped
+
+
 # --- Source configuration -------------------------------------------------
 
 # Google News RSS search: keyless, query-driven, returns real outlet attribution.
@@ -499,7 +532,55 @@ def _iter_jsonld(node):
 _JSONLD_RE = re.compile(
     r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
     re.DOTALL | re.IGNORECASE)
+_NEXTDATA_RE = re.compile(
+    r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+    re.DOTALL | re.IGNORECASE)
+_SCRIPT_RE = re.compile(r"<script[^>]*>(.*?)</script>", re.DOTALL | re.IGNORECASE)
 _H_SPLIT_RE = re.compile(r"(<h[23][^>]*>.*?</h[23]>)", re.DOTALL | re.IGNORECASE)
+
+
+def _ingest_liveblog_json(data, page_url, out, seen, content_seen):
+    """Walk a parsed JSON blob for LiveBlogPosting update arrays and append each update to
+    `out`. Returns the number of raw updates seen (before the length/dedupe filters). Shared
+    by the JSON-LD and __NEXT_DATA__ paths so both feed the same extraction and dedupe."""
+    raw_seen = 0
+    for node in _iter_jsonld(data):
+        if not isinstance(node, dict):
+            continue
+        updates = node.get("liveBlogUpdate")
+        if not isinstance(updates, list):
+            continue
+        for up in updates:
+            if not isinstance(up, dict):
+                continue
+            raw_seen += 1
+            head = _clean(up.get("headline") or up.get("name"))
+            body = _clean(up.get("articleBody") or up.get("description"))
+            text = f"{head} {body}".strip()
+            if len(text) < 40:                 # skip trivial/procedural updates
+                continue
+            anchor = _content_anchor(head + body)
+            if anchor in content_seen:         # dedup by content, not by URL
+                continue
+            # Each update needs a distinct, stable link. Use the update's own URL when it
+            # already distinguishes updates (an ?update= param or a #fragment); otherwise the
+            # feed handed us the bare page URL, so append a content anchor so every update
+            # keeps its own link instead of collapsing to one.
+            raw = (up.get("url") or "").strip()
+            if raw and ("update=" in raw or "#" in raw):
+                url = raw
+            elif raw:
+                url = f"{raw}#u{anchor}"
+            else:
+                url = f"{page_url}#u{anchor}"
+            content_seen.add(anchor)
+            seen.add(url)
+            out.append({
+                "source": "Al Jazeera", "collector": "AJ liveblog",
+                "title": (head or body)[:280], "url": url,
+                "summary": body[:2200], "published": up.get("datePublished", ""),
+            })
+    return raw_seen
 
 
 def _content_anchor(text):
@@ -525,52 +606,30 @@ def from_aljazeera_liveblog(page_url):
 
     out, seen, content_seen = [], set(), set()
     jsonld_seen = 0
+    n_struct = 0
 
-    # 1) LiveBlogPosting JSON-LD (most reliable). The page was discovered *as* the Iran-war
-    #    liveblog, so its updates are on-topic by construction — do NOT re-filter each update
-    #    against the Iran keyword list (that was dropping most updates and leaving only one).
-    for m in _JSONLD_RE.finditer(html):
+    # 1) Structured LiveBlogPosting data (most reliable). The page was discovered *as* the
+    #    Iran-war liveblog, so its updates are on-topic by construction — do NOT re-filter each
+    #    update against the Iran keyword list (that was dropping most and leaving only one).
+    #    Al Jazeera exposes the update array in ld+json; some builds also stash it in the
+    #    __NEXT_DATA__ / app-state blob, or another <script> that mentions liveBlogUpdate, so
+    #    scan all three and let content-dedupe merge any overlap.
+    blobs = list(_JSONLD_RE.findall(html)) + list(_NEXTDATA_RE.findall(html))
+    if "liveBlogUpdate" in html:
+        blobs += [s for s in _SCRIPT_RE.findall(html) if "liveBlogUpdate" in s]
+    for blob in blobs:
+        blob = blob.strip()
+        if "liveBlogUpdate" not in blob:
+            continue
         try:
-            data = json.loads(m.group(1))
+            data = json.loads(blob)
         except ValueError:
             continue
-        for node in _iter_jsonld(data):
-            updates = node.get("liveBlogUpdate") if isinstance(node, dict) else None
-            if not isinstance(updates, list):
-                continue
-            for up in updates:
-                if not isinstance(up, dict):
-                    continue
-                jsonld_seen += 1
-                head = _clean(up.get("headline") or up.get("name"))
-                body = _clean(up.get("articleBody") or up.get("description"))
-                text = f"{head} {body}".strip()
-                if len(text) < 40:                 # skip trivial/procedural updates
-                    continue
-                anchor = _content_anchor(head + body)
-                if anchor in content_seen:         # dedup by content, not by URL
-                    continue
-                # Each update needs a distinct, stable link. Use the update's own URL when it
-                # already distinguishes updates (an ?update= param or a #fragment); otherwise
-                # the feed handed us the bare page URL, so append a content anchor so every
-                # update keeps its own link instead of collapsing to one.
-                raw = (up.get("url") or "").strip()
-                if raw and ("update=" in raw or "#" in raw):
-                    url = raw
-                elif raw:
-                    url = f"{raw}#u{anchor}"
-                else:
-                    url = f"{page_url}#u{anchor}"
-                content_seen.add(anchor)
-                seen.add(url)
-                out.append({
-                    "source": "Al Jazeera", "collector": "AJ liveblog",
-                    "title": (head or body)[:280], "url": url,
-                    "summary": body[:2200], "published": up.get("datePublished", ""),
-                })
+        jsonld_seen += _ingest_liveblog_json(data, page_url, out, seen, content_seen)
+    n_struct = len(out)
 
-    # 2) If JSON-LD was thin (or absent), ALSO split the article region on update headings
-    #    (h2/h3) and merge — deduped by content anchor against what JSON-LD already captured.
+    # 2) If the structured data was thin (or absent), ALSO split the article region on update
+    #    headings (h2/h3) and merge — deduped by content anchor against what we already have.
     if len(out) < 5:
         region = html
         rm = re.search(r"<(article|main)[^>]*>(.*?)</\1>", html, re.DOTALL | re.IGNORECASE)
@@ -595,6 +654,8 @@ def from_aljazeera_liveblog(page_url):
                 "title": head[:280], "url": url, "summary": body[:2200], "published": "",
             })
 
+    n_headings = len(out) - n_struct
+
     # 3) Last resort: chunk the page's substantial, on-topic paragraphs into pseudo-updates,
     #    so we still capture liveblog content even if its markup is unfamiliar.
     if not out:
@@ -608,9 +669,15 @@ def from_aljazeera_liveblog(page_url):
                 "title": chunk[:120], "url": f"{page_url}#c{_content_anchor(chunk)}",
                 "summary": chunk[:2200], "published": "",
             })
+    n_paras = len(out) - n_struct - n_headings
 
+    # Per-path counts make the first live run diagnosable: if jsonld_raw is high but struct is
+    # low, updates are present but being filtered; if all paths are ~0, the updates load via an
+    # API/JS and the fetched HTML doesn't carry them (then we add that endpoint).
     slug = page_url.rsplit('/', 1)[-1][:40]
-    print(f"  [aje-live] {slug}: {len(out)} updates ({jsonld_seen} in JSON-LD)")
+    print(f"  [aje-live] {slug}: {len(out)} updates "
+          f"(struct={n_struct} [jsonld_raw={jsonld_seen}], headings={n_headings}, "
+          f"paras={n_paras})")
     return out
 
 
@@ -793,6 +860,11 @@ def collect():
     # same publisher URL.
     deduped = _dedupe(deduped)
 
+    # Drop non-news / low-authority domains (now that URLs are canonical, so we see the real
+    # publisher host rather than a Google News redirect).
+    deduped, junk = _drop_junk(deduped)
+    print(f"Dropped {junk} items from non-news / low-authority domains")
+
     # Cross-day suppression: drop stories (by canonical URL) already carried on an earlier
     # date, so the same item does not repeat in consecutive briefs. Runs before enrich so we
     # don't spend full-text fetches on items we're about to drop.
@@ -852,6 +924,28 @@ def _selftest():
         _norm_url("https://www.aljazeera.com/news/liveblog/2026/8/24/s?update=4880837")
     assert _norm_url("https://x.com/a/status/1?ref_src=twsrc&utm_medium=x#frag") == \
         "x.com/a/status/1"
+
+    # Junk-domain drop: non-news hosts removed, real outlets kept.
+    kept, dropped = _drop_junk([
+        {"url": "https://migflug.com/afterburner/houthis-threaten-strait/"},
+        {"url": "https://www.reuters.com/world/middle-east/x"},
+        {"url": "https://streamlinefeed.co.ke/news/iraq"},
+    ])
+    assert dropped == 2 and len(kept) == 1 and "reuters" in kept[0]["url"], (kept, dropped)
+
+    # Liveblog structured ingestion: two updates parsed, kept distinct by their ?update= URL.
+    out, seen, cseen = [], set(), set()
+    n = _ingest_liveblog_json(
+        {"@type": "LiveBlogPosting", "liveBlogUpdate": [
+            {"headline": "Iran warns of retaliation against Gulf states over Hormuz",
+             "articleBody": "An Iranian official said any support for the economic war.",
+             "url": "https://www.aljazeera.com/news/liveblog/2026/8/25/s?update=4880890"},
+            {"headline": "Houthis strike Saudi oil tanker Amzan off Yanbu",
+             "articleBody": "The vessel was hit by a ballistic missile, a spokesperson said.",
+             "url": "https://www.aljazeera.com/news/liveblog/2026/8/25/s?update=4880624"},
+        ]}, "https://www.aljazeera.com/news/liveblog/2026/8/25/s", out, seen, cseen)
+    assert n == 2 and len(out) == 2, (n, out)
+    assert _norm_url(out[0]["url"]) != _norm_url(out[1]["url"]), out
     print("collect.py self-test passed")
 
 
