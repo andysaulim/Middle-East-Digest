@@ -242,8 +242,10 @@ def from_x_syndication(handles=None, days=1, now=None):
 # nothing from GitHub Actions. A cheap per-use scraper (default: twitterapi.io, ~$0.15 per
 # 1,000 tweets) reliably pulls each official's recent posts WITH their text. Set X_SCRAPER_KEY
 # to enable it; it then replaces the free pull. X_SCRAPER_BASE overrides the vendor endpoint.
-
-_SCRAPER_BASE = os.environ.get("X_SCRAPER_BASE", "https://api.twitterapi.io")
+# Use `or` (not a get() default): the workflow passes X_SCRAPER_BASE from a repo variable that
+# is usually UNSET, which arrives as an empty string and would otherwise blank out the base,
+# producing a path-only URL ("unknown url type"). An empty value must fall back to the default.
+_SCRAPER_BASE = (os.environ.get("X_SCRAPER_BASE") or "https://api.twitterapi.io").rstrip("/")
 
 
 def _parse_scraper_time(s):
