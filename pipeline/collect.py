@@ -678,6 +678,24 @@ def from_aljazeera_liveblog(page_url):
     print(f"  [aje-live] {slug}: {len(out)} updates "
           f"(struct={n_struct} [jsonld_raw={jsonld_seen}], headings={n_headings}, "
           f"paras={n_paras})")
+
+    # When extraction came up thin, the updates almost certainly load client-side. Log what the
+    # fetched HTML actually contains so the next run reveals the mechanism (a GraphQL/API URL,
+    # a __NEXT_DATA__ state blob, an embedded post id) and we can target that endpoint directly.
+    if len(out) < 5:
+        low = html.lower()
+        api = ""
+        m = re.search(r'https?://[^"\']*(?:graphql|/api/)[^"\']*', html)
+        if m:
+            api = m.group(0)[:200]
+        pid = ""
+        pm = re.search(r'"(?:postId|post_id|liveBlogId|id)"\s*:\s*"?(\d{5,})', html)
+        if pm:
+            pid = pm.group(1)
+        print(f"  [aje-live] DIAG {slug}: html={len(html)}B ld+json={html.count('application/ld+json')} "
+              f"liveBlogUpdate={html.count('liveBlogUpdate')} __NEXT_DATA__={'__NEXT_DATA__' in html} "
+              f"graphql={low.count('graphql')} p_tags={html.count('<p')} scripts={html.count('<script')} "
+              f"postid={pid or '-'} api={api or '-'}")
     return out
 
 
