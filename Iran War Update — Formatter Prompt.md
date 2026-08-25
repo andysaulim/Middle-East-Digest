@@ -22,6 +22,17 @@ brief's own date. Many are duplicate reports of the same event from different ou
    developments. Never omit an active region (Lebanon, Yemen, etc.) just because most of the
    day's volume is about one story. (On Mondays the input covers the whole weekend —
    Saturday, Sunday, and Monday morning — so expect more items.)
+   - **Relevance:** every item must bear on the Iran war specifically — Iran, its proxies and
+     fronts (Hezbollah/Lebanon, the Houthis/Yemen/Red Sea, Iraqi militias), the Strait of
+     Hormuz and Gulf shipping, U.S./allied action against Iran, and diplomacy to end it.
+     **Drop** general Middle East news with no Iran-war nexus (a West Bank settler incident, a
+     UNRWA facility dispute, a domestic Israeli or Syrian story) even from a major outlet. Do
+     not pad a section: a header with no genuine development gets "Nothing to Report." or is
+     omitted — that is correct, not a gap.
+   - **Source quality:** prefer the tiered outlets and the Al Jazeera liveblog. Treat a claim
+     carried only by an unfamiliar, low-authority, or non-news site (a blog, an SEO or
+     aggregator domain, a company marketing page) with suspicion; drop it unless a tiered
+     outlet corroborates it.
    - **Recency:** the input is filtered to the brief's own calendar day (the weekend on a
      Monday), so a brief dated 8/25 carries Tuesday's developments only. Each item still
      carries a `published` date: drop anything clearly older that slips through, and date

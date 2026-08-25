@@ -87,6 +87,18 @@ Produce the day's brief. Steps:
    trivia. Be COMPREHENSIVE: aim for roughly 15-40 real items across the whole brief, and
    cover every region that has real developments. Never omit an active region (Lebanon,
    Yemen, etc.) just because most of the day's volume is about one story (e.g. Hormuz).
+   RELEVANCE: every item must bear on the Iran war specifically — Iran, its proxies and
+   fronts (Hezbollah/Lebanon, the Houthis/Yemen/Red Sea, Iraqi militias), the Strait of
+   Hormuz and Gulf shipping, U.S./allied action against Iran, and diplomacy to end the war.
+   DROP general Middle East news with no Iran-war nexus (for example a West Bank settler
+   incident, a UNRWA facility dispute, or a domestic Israeli or Syrian story) even when a
+   major outlet reported it. Do NOT pad a section to look fuller: a header with no genuine
+   Iran-war development gets "Nothing to Report." (essential/General) or is omitted
+   (conditional country) — that is correct and expected, not a gap.
+   SOURCE QUALITY: prefer the tiered outlets in step 7 and the Al Jazeera liveblog. Treat a
+   claim carried only by an unfamiliar, low-authority, or non-news site (a blog, an SEO/
+   aggregator domain, a company marketing page) with suspicion: drop it unless a tiered
+   outlet corroborates it, rather than build a bullet on it alone.
    RECENCY: each item carries a "published" date and the input is already filtered to the
    brief's own day (the weekend on a Monday). Include only developments from that window;
    drop anything clearly older even if it appears in the input, and date each item
@@ -333,6 +345,10 @@ def build_brief():
                 f"Brief failed validation after {len(attempts)} attempts and repair: "
                 f"{last_critical}"
             )
+
+    # Enforce the house rule against "claim" mechanically (the prompt asks for it, but the
+    # model still slips; this rewrites the reporting-verb uses to a neutral verb).
+    brief_md = validate.neutralize_claim(brief_md)
 
     # Guarantee every country header is present (no-news countries show a placeholder),
     # then append the deterministic tail sections (rendered from source, never the model,
