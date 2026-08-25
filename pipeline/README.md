@@ -34,9 +34,15 @@ weekly.py                                                  (Friday Week in Revie
 
 ### Collection window
 
-1 day on Tuesday–Friday; **3 days on Monday** so the Monday brief carries the weekend
-(Saturday, Sunday, and Monday morning up to the ~9am ET send). After a holiday, set the
-`LOOKBACK_DAYS` env var to widen the window for one run.
+Aligned to **U.S. Eastern calendar days**, not a rolling clock. On Tuesday–Friday the brief
+is **same-day only** — the window starts at 00:00 ET of the brief's own date, so a brief
+dated 8/25 is Tuesday-only. On **Monday** it reaches back to 00:00 ET Saturday so the Monday
+brief carries the weekend (Saturday, Sunday, and Monday morning up to the ~9am ET send).
+After a holiday, set the `LOOKBACK_DAYS` env var to widen the span (in days) for one run.
+
+Deduplication runs in three passes — exact headline, canonical link, and fuzzy title
+overlap (differently-worded headlines for the same event) — and a story already carried on
+an earlier day is suppressed, so items don't repeat within or across briefs.
 
 ### Sources and how to extend them
 

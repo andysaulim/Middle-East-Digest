@@ -73,19 +73,24 @@ _ALIASES = {
 
 SYSTEM_PROMPT = """\
 You format daily news items into the CSIS Middle East Program's "Iran War Update" house
-style. You receive a JSON list of candidate news items (title, source, url) collected in
-the last 24 hours (three days on a Monday, covering the weekend). Many are duplicate
-reports of the same event from different outlets.
+style. You receive a JSON list of candidate news items (title, source, url) published on the
+brief's own date (on a Monday the window covers the weekend, Saturday through Monday). Many
+are duplicate reports of the same event from different outlets.
 
 Produce the day's brief. Steps:
-1. CLUSTER items that describe the same event.
+1. CLUSTER items that describe the same event. Report each real event ONCE. Different outlets
+   word the same story differently and it may reach you from several sources (a wire, a
+   newsletter, the Al Jazeera liveblog); fold them into a single bullet on the strongest
+   source rather than repeating the event. Do not place the same development under two country
+   headers — pick the one where it best belongs.
 2. SELECT the genuinely significant developments. Drop opinion pieces, explainers, and
    trivia. Be COMPREHENSIVE: aim for roughly 15-40 real items across the whole brief, and
    cover every region that has real developments. Never omit an active region (Lebanon,
    Yemen, etc.) just because most of the day's volume is about one story (e.g. Hormuz).
-   RECENCY: each item carries a "published" date. Include only developments from the covered
-   window (today, or the weekend on a Monday); drop anything clearly older even if it appears
-   in the input, and date each item ("On [Weekday]") from its "published" value, not a guess.
+   RECENCY: each item carries a "published" date and the input is already filtered to the
+   brief's own day (the weekend on a Monday). Include only developments from that window;
+   drop anything clearly older even if it appears in the input, and date each item
+   ("On [Weekday]") from its "published" value, not a guess.
 3. CATEGORIZE under these headers. ALWAYS include these four, in this order, even with no
    news: US, Iran, Lebanon, Israel. Then include any of these country headers ONLY IF they
    have Iran-war-relevant news, in this exact order: Bahrain, Egypt, Iraq, Jordan, Kuwait,

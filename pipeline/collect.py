@@ -17,9 +17,10 @@ Google News redirect links to real publisher URLs (resolve.py), enriches the top
 full article text (fulltext.py) so the brief can go beyond the headline, and writes both a
 dated JSON file (for the digest step) and a SQLite archive (the queryable corpus).
 
-Lookback window: 1 day on Tue-Fri, 3 days on Monday so the Monday brief carries the
-weekend (Saturday, Sunday, and Monday morning up to the ~9am ET send). Override with the
-LOOKBACK_DAYS env var after a holiday.
+Lookback window (calendar days, America/New_York): the brief carries only items published
+on the brief's own ET date on Tue-Fri (a brief dated 8/25 is Tuesday-only). Monday reaches
+back to Saturday 00:00 ET so the weekend (Saturday, Sunday, Monday) is not lost, since there
+is no weekend brief. Override the span with the LOOKBACK_DAYS env var after a holiday.
 
 Stdlib only.
 """
@@ -32,9 +33,16 @@ import sqlite3
 import re
 import os
 import time
+import hashlib
 from datetime import datetime, timezone, timedelta
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+
+try:                                     # ET calendar-day alignment (see _et_day_start)
+    from zoneinfo import ZoneInfo
+    _ET = ZoneInfo("America/New_York")
+except Exception:                        # no tz database on the host -> assume EDT (UTC-4)
+    _ET = timezone(timedelta(hours=-4))
 
 import resolve
 import social
@@ -163,6 +171,141 @@ def _norm_key(title):
     return re.sub(r"[^a-z0-9]", "", (title or "").lower())[:80]
 
 
+def _norm_url(url):
+    """Canonical form of a URL for dedupe: scheme/host lowered, tracking query and fragment
+    dropped, trailing slash removed. Two links that point at the same article (or the same
+    liveblog update anchor) collapse to one key. A liveblog update keeps its #anchor because
+    that is what makes each update distinct, so those are preserved."""
+    u = (url or "").strip()
+    if not u:
+        return ""
+    frag = ""
+    if "#" in u:
+        u, frag = u.split("#", 1)
+    u = re.sub(r"^https?://", "", u, flags=re.I).lower()
+    u = u.split("?", 1)[0].rstrip("/")
+    # Keep a liveblog update's anchor (…#…) as part of the key; drop other fragments.
+    if frag and "liveblog" in u:
+        u = f"{u}#{frag.lower()}"
+    return u
+
+
+_STOPWORDS = {
+    "the", "a", "an", "of", "to", "in", "on", "for", "and", "or", "as", "at", "by",
+    "with", "from", "is", "are", "was", "were", "be", "been", "after", "over", "amid",
+    "says", "say", "said", "reports", "report", "reported", "new", "its", "his", "her",
+    "their", "it", "he", "she", "they", "this", "that", "into", "than", "will", "has",
+    "have", "had", "up", "out", "off", "about", "us", "u.s.", "iran", "iranian",
+}
+
+
+def _title_tokens(title):
+    """Significant lowercase word tokens of a title (stopwords and short words dropped),
+    for measuring how much two headlines overlap."""
+    words = re.findall(r"[a-z0-9]+", (title or "").lower())
+    return {w for w in words if len(w) > 2 and w not in _STOPWORDS}
+
+
+def _tok_match(a, b):
+    """Two title tokens count as the same word if equal or one is a prefix of the other
+    (min length 4), so morphological variants that differ across outlets collapse:
+    israel/israeli, south/southern, strike/strikes, position/positions."""
+    return a == b or (len(a) >= 4 and len(b) >= 4 and (a.startswith(b) or b.startswith(a)))
+
+
+def _same_story(a_tokens, b_tokens):
+    """True when two headlines describe the same event: enough shared significant tokens
+    (prefix-matched, so wording differences don't defeat it) and a high overlap ratio.
+    Conservative on purpose so distinct strikes or statements are not merged. 'Iran'/
+    'Iranian' are stopwords here so two unrelated Iran items don't collide on that alone."""
+    if len(a_tokens) < 3 or len(b_tokens) < 3:
+        return False
+    shared = sum(1 for a in a_tokens if any(_tok_match(a, b) for b in b_tokens))
+    if shared < 4:
+        return False
+    denom = len(a_tokens) + len(b_tokens) - shared
+    return denom > 0 and shared / denom >= 0.55
+
+
+def _stronger(challenger, incumbent):
+    """True when challenger is a better representative of a story than incumbent: a prestige
+    outlet over a non-prestige one, or a canonical link over a Google News redirect."""
+    return (
+        (_is_prestige(challenger) and not _is_prestige(incumbent)) or
+        (not resolve.is_gnews(challenger.get("url", "")) and
+         resolve.is_gnews(incumbent.get("url", "")))
+    )
+
+
+def _dedupe(items):
+    """Collapse duplicate reports of the same event, keeping the strongest source. Three
+    passes: exact normalized title, canonical URL, then fuzzy title-token overlap so the same
+    story under two differently-worded headlines is caught (the plain title key missed those,
+    which is what surfaced as repetition in the brief). Order is otherwise preserved."""
+    # Pass 1 — exact normalized title.
+    best, order = {}, []
+    for it in items:
+        k = _norm_key(it.get("title"))
+        if not k:
+            k = _norm_url(it.get("url"))
+        if not k:
+            continue
+        if k not in best:
+            best[k] = it
+            order.append(k)
+        elif _stronger(it, best[k]):
+            best[k] = it
+    survivors = [best[k] for k in order]
+
+    # Pass 2 — canonical URL (catches same link with differing titles, and Google News
+    # redirects that resolved to the same publisher URL).
+    best, order = {}, []
+    for it in survivors:
+        k = _norm_url(it.get("url")) or _norm_key(it.get("title"))
+        if not k:
+            continue
+        if k not in best:
+            best[k] = it
+            order.append(k)
+        elif _stronger(it, best[k]):
+            best[k] = it
+    survivors = [best[k] for k in order]
+
+    # Pass 3 — fuzzy title overlap (differently-worded headlines for one event).
+    kept, kept_tokens = [], []
+    for it in survivors:
+        toks = _title_tokens(it.get("title"))
+        dup = next((i for i, kt in enumerate(kept_tokens) if _same_story(toks, kt)), None)
+        if dup is None:
+            kept.append(it)
+            kept_tokens.append(toks)
+        elif _stronger(it, kept[dup]):
+            kept[dup] = it
+            kept_tokens[dup] = toks
+    return kept
+
+
+def _drop_seen_before(items, date_str):
+    """Suppress items whose canonical URL was already collected on an earlier date, so a
+    story (or an unchanged liveblog update) does not reappear in consecutive briefs. Items
+    first seen today are kept. Returns (kept, dropped)."""
+    try:
+        con = sqlite3.connect(DB_PATH)
+        rows = con.execute("SELECT url FROM items WHERE collected_date < ?",
+                           (date_str,)).fetchall()
+        con.close()
+    except Exception:
+        return items, 0
+    seen = {_norm_url(r[0]) for r in rows if r[0]}
+    kept, dropped = [], 0
+    for it in items:
+        if _norm_url(it.get("url")) in seen:
+            dropped += 1
+        else:
+            kept.append(it)
+    return kept, dropped
+
+
 def _is_relevant(text):
     t = (text or "").lower()
     return any(k in t for k in KEYWORDS)
@@ -211,10 +354,22 @@ def _parse_published(s):
         return None
 
 
+def _et_day_start(now=None):
+    """Midnight (00:00) of the current America/New_York calendar day, as an aware UTC
+    datetime. This is the anchor for a same-day window: the ~9am ET send means a brief
+    dated D keeps items published from 00:00 ET on D onward."""
+    now = now or datetime.now(timezone.utc)
+    et = now.astimezone(_ET)
+    start_et = et.replace(hour=0, minute=0, second=0, microsecond=0)
+    return start_et.astimezone(timezone.utc)
+
+
 def _window_cutoff(days, now=None):
-    """Oldest publish time we keep: a rolling `days`-long window (matches the collectors'
-    own when:Nd / timespan bounds), so week-old items that leak through are dropped."""
-    return (now or datetime.now(timezone.utc)) - timedelta(days=days)
+    """Oldest publish time we keep, aligned to ET calendar-day boundaries rather than a
+    rolling clock so a weekday brief is strictly same-day. days=1 -> start of today (ET);
+    days=3 (Monday) -> start of Saturday (ET), so the weekend is carried, not a bleed of
+    the prior evening. Older items that leak through the collectors are dropped."""
+    return _et_day_start(now) - timedelta(days=days - 1)
 
 
 def _filter_stale(items, cutoff):
@@ -329,6 +484,14 @@ _JSONLD_RE = re.compile(
 _H_SPLIT_RE = re.compile(r"(<h[23][^>]*>.*?</h[23]>)", re.DOTALL | re.IGNORECASE)
 
 
+def _content_anchor(text):
+    """A short, content-derived anchor for a liveblog update that lacks its own deep link.
+    Keying the fallback URL on the update's text (not its position on the page) keeps it
+    stable across days, so the same update is recognized and suppressed tomorrow instead of
+    reappearing under a shifted index."""
+    return hashlib.sha1((text or "").encode("utf-8", "ignore")).hexdigest()[:10]
+
+
 def from_aljazeera_liveblog(page_url):
     """Scrape one Al Jazeera liveblog for its individual updates (heading + text + time).
 
@@ -359,7 +522,8 @@ def from_aljazeera_liveblog(page_url):
                     continue
                 head = _clean(up.get("headline") or up.get("name"))
                 body = _clean(up.get("articleBody") or up.get("description"))
-                url = (up.get("url") or "").strip() or f"{page_url}#u{i}"
+                url = (up.get("url") or "").strip() or \
+                    f"{page_url}#u{_content_anchor(head + body)}"
                 if url in seen or not (head or body):
                     continue
                 text = f"{head} {body}".strip()
@@ -384,7 +548,7 @@ def from_aljazeera_liveblog(page_url):
             body = _clean(re.sub(r"<[^>]+>", " ", parts[i + 1]))
             if not head or len(body) < 60 or not _is_relevant(f"{head} {body}"):
                 continue
-            url = f"{page_url}#u{i}"
+            url = f"{page_url}#u{_content_anchor(head + body)}"
             if url in seen:
                 continue
             seen.add(url)
@@ -403,7 +567,7 @@ def from_aljazeera_liveblog(page_url):
             chunk = " ".join(paras[i:i + 3])
             out.append({
                 "source": "Al Jazeera", "collector": "AJ liveblog",
-                "title": chunk[:120], "url": f"{page_url}#c{i}",
+                "title": chunk[:120], "url": f"{page_url}#c{_content_anchor(chunk)}",
                 "summary": chunk[:2200], "published": "",
             })
 
@@ -570,37 +734,31 @@ def collect():
     for lb in _discover_liveblogs(items):
         items += from_aljazeera_liveblog(lb)
 
-    # Drop stale items: an article whose published date is older than the rolling window
-    # (this is what let a week-old Treasury item slip in). Dateless items are kept.
+    # Drop stale items: anything published before the ET calendar-day cutoff (same-day on
+    # Tue-Fri; back to Saturday on Monday). This is what keeps a brief dated 8/25 Tuesday-only
+    # and what let a week-old Treasury item slip in before. Dateless items are kept.
     cutoff = _window_cutoff(days)
     items, dropped = _filter_stale(items, cutoff)
     print(f"Dropped {dropped} stale items (published before {cutoff:%Y-%m-%d %H:%MZ})")
 
-    # Cross-source dedupe by loose title key. On a collision, keep the stronger source
-    # (prestige / canonical publisher) over a weaker one (e.g. a Google News redirect).
-    best = {}
-    order = []
-    for it in items:
-        k = _norm_key(it["title"])
-        if not k:
-            continue
-        if k not in best:
-            best[k] = it
-            order.append(k)
-        else:
-            incumbent = best[k]
-            challenger_better = (
-                (_is_prestige(it) and not _is_prestige(incumbent)) or
-                (not resolve.is_gnews(it["url"]) and resolve.is_gnews(incumbent["url"]))
-            )
-            if challenger_better:
-                best[k] = it
-    deduped = [best[k] for k in order]
-    print(f"\n{len(items)} raw -> {len(deduped)} after dedupe")
+    # Cross-source dedupe (exact title, canonical URL, then fuzzy title overlap), keeping the
+    # stronger source on each collision.
+    raw = len(items)
+    deduped = _dedupe(items)
+    print(f"\n{raw} raw -> {len(deduped)} after dedupe")
 
     # Canonicalize Google News redirect links to real publisher URLs so the model can copy
     # them accurately (fixes SOURCE-OR-SKIP drops) and the brief carries clean links.
     deduped = resolve.resolve_items(deduped)
+    # Second dedupe pass: now that redirects are canonical, collapse any that resolved to the
+    # same publisher URL.
+    deduped = _dedupe(deduped)
+
+    # Cross-day suppression: drop stories (by canonical URL) already carried on an earlier
+    # date, so the same item does not repeat in consecutive briefs. Runs before enrich so we
+    # don't spend full-text fetches on items we're about to drop.
+    deduped, repeats = _drop_seen_before(deduped, date_str)
+    print(f"Dropped {repeats} items already seen on an earlier date")
 
     # Enrich the top items with real article text so the model can write beyond the headline.
     deduped = fulltext.enrich(deduped)
@@ -617,5 +775,46 @@ def collect():
     return out_path
 
 
+def _selftest():
+    """Offline regression tests for the date window and dedupe logic (no network)."""
+    # ET calendar-day window: a Tuesday brief keeps Tuesday only; Monday reaches Saturday.
+    tue = datetime(2026, 8, 25, 13, 0, tzinfo=timezone.utc)
+    assert _window_cutoff(1, now=tue) == datetime(2026, 8, 25, 4, 0, tzinfo=timezone.utc)
+    mon = datetime(2026, 8, 24, 13, 0, tzinfo=timezone.utc)
+    assert _window_cutoff(3, now=mon) == datetime(2026, 8, 22, 4, 0, tzinfo=timezone.utc)
+    cut = _window_cutoff(1, now=tue)
+    # Monday-evening ET item (= Tue 03:00 UTC) dropped; Tuesday-morning ET item kept.
+    assert _filter_stale(
+        [{"title": "x", "url": "http://a",
+          "published": "Mon, 24 Aug 2026 23:00:00 -0400"}], cut)[0] == []
+    assert len(_filter_stale(
+        [{"title": "y", "url": "http://b",
+          "published": "Tue, 25 Aug 2026 06:00:00 -0400"}], cut)[0]) == 1
+
+    # Fuzzy dedupe: two differently-worded reports of one event merge, prestige wins,
+    # distinct events stay separate.
+    d = _dedupe([
+        {"title": "Israel strikes Hezbollah positions in south Lebanon overnight",
+         "url": "https://news.google.com/rss/articles/AAA",
+         "source": "Google News", "collector": "Google News"},
+        {"title": "Israeli military strikes Hezbollah positions across southern Lebanon",
+         "url": "https://reuters.com/world/mideast/xyz",
+         "source": "Reuters", "collector": "RSS"},
+        {"title": "Oil tanker seized near Strait of Hormuz",
+         "url": "https://apnews.com/tanker", "source": "AP", "collector": "RSS"},
+    ])
+    assert len(d) == 2 and {x["source"] for x in d} == {"Reuters", "AP"}, d
+
+    # URL normalization keeps liveblog update anchors distinct but strips tracking / fragments.
+    assert _norm_url("https://www.aljazeera.com/news/liveblog/2026/8/25/l#u1") != \
+        _norm_url("https://www.aljazeera.com/news/liveblog/2026/8/25/l#u2")
+    assert _norm_url("https://x.com/a/status/1?utm=1#frag") == "x.com/a/status/1"
+    print("collect.py self-test passed")
+
+
 if __name__ == "__main__":
-    collect()
+    import sys
+    if "--selftest" in sys.argv:
+        _selftest()
+    else:
+        collect()
