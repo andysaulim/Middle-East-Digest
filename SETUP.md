@@ -188,15 +188,15 @@ The tool uses free, public, keyless sources, so there are no paid subscriptions 
   is the single biggest source of the brief's detail.
 - **Direct outlet feeds**, filtered to relevant items: Times of Israel and Al Arabiya.
 - **GDELT**, a global news-event database, as a backbone to catch events the searches miss.
-- **Social feeds (X and Truth Social), automatically.** The tool pulls a watchlist of primary
-  accounts without any paid key: **X** posts through the public syndication feed that powers
-  embedded timelines, and **Truth Social** through its Mastodon-based public API (Trump's
-  posts, viewable without a login). The watchlist (`pipeline/social.py`) follows the input
-  spec — U.S. officials (CENTCOM, Rubio, Vance, Schumer, Huckabee), Gulf and Arab foreign
-  ministries, Israeli and Iranian leaders, Lebanese officials, and the maritime trackers
-  (UKMTO, Windward, MarineTraffic, Kpler). These use unofficial public endpoints, so a handle
-  can be blocked or return nothing; some handles are best-guesses marked to verify. When a
-  pull fails the tool logs it and leans on the manual file below.
+- **Social feeds (X and Truth Social).** The tool pulls a watchlist of primary accounts
+  (`pipeline/social.py`): U.S. officials (CENTCOM, Rubio, Vance, Schumer, Huckabee, Energy Sec.
+  Wright), Gulf and Arab foreign ministries and defense ministries, Israeli and Iranian
+  leaders, Lebanese officials, and maritime trackers (UK_MTO, Windward, MarineTraffic, Kpler).
+  **Truth Social** (Trump) comes through its public Mastodon API. **X/Twitter** is the hard one
+  — X killed its free API and blocks servers, so reliable pulling needs a cheap paid scraper
+  (`X_SCRAPER_KEY`, Step 1d); without it the tool tries a free method that X usually blocks
+  from CI, and leans on the Al Jazeera liveblog (which quotes many official tweets) plus the
+  manual file.
 - **Manual additions (the fallback).** Any primary post the automatic pull misses — a
   particular tweet, a Truth Social post, a YouTube clip — can still be added by hand: paste a
   few `{source, title, link}` entries into `pipeline/data/manual.json` and the next run folds
@@ -326,6 +326,7 @@ the Outlook/Microsoft Graph set (see Step 1b).
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | Required | The Claude API key that powers the drafting step. Without it the run cannot draft. |
 | `CONGRESS_API_KEY` | Optional | Free key from [api.congress.gov](https://api.congress.gov/sign-up/) that powers the "U.S. Congress" section. Unset simply omits that section. |
+| `X_SCRAPER_KEY` | Optional | API key for a paid X/Twitter scraper (see Step 1d) that pulls officials' tweets with their text. Unset -> the tool falls back to the free method, which X blocks from servers (so ~no tweets). |
 | `GMAIL_USER` | Gmail delivery | The Gmail address the draft is sent from. |
 | `GMAIL_APP_PASS` | Gmail delivery | A Gmail **app password** (not the account password). |
 | `DIGEST_TO` | Gmail delivery | Recipient(s) of the draft; comma-separated for more than one. |
@@ -370,6 +371,17 @@ one-time things on the **Gmail account** named in `GMAIL_USER`:
 No new secrets — the tool reads the inbox with the same `GMAIL_USER` / `GMAIL_APP_PASS` it
 already uses to send. Leave either step undone and the tool simply skips newsletters. (Set the
 repository variable `NEWSLETTERS` to `0` to turn the feature off entirely.)
+
+**Step 1d — Optional: officials' X/Twitter posts.** X shut off free API access and blocks
+automated requests from servers, so the tool cannot pull tweets for free from GitHub Actions.
+To capture officials' posts (CENTCOM, ministers, etc.) with their text, sign up for a cheap
+per-use scraper — e.g. [twitterapi.io](https://twitterapi.io) (about $0.15 per 1,000 tweets,
+pay-as-you-go, roughly a few dollars a month for the watchlist) — and add its key as the
+`X_SCRAPER_KEY` secret. The tool then pulls each account in `pipeline/social.py`'s watchlist.
+To use a different vendor, set the repository **variable** `X_SCRAPER_BASE` to its API base
+URL (the default targets twitterapi.io's `/twitter/user/last_tweets` endpoint). Without the
+key, nothing breaks — the brief just leans on the Al Jazeera liveblog (which quotes many of
+those tweets) and the manual file.
 
 **Step 2 — Optional variables.** On the Variables tab, you may set `IRAN_BRIEF_MODEL` (the
 fast first-attempt model) and `IRAN_BRIEF_PRIMARY_MODEL` (the stronger model used on a

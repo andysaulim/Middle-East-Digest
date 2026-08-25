@@ -49,6 +49,9 @@ X_HANDLES = [
     "SenSchumer",         # Chuck Schumer
     "GovMikeHuckabee",    # Mike Huckabee, U.S. Ambassador to Israel
     "jaredkushner",       # Jared Kushner (verify; often inactive)
+    "SecretaryWright",    # Chris Wright, U.S. Energy Secretary (cited in the human brief)
+    "USEmbMuscat",        # U.S. Embassy Muscat (Oman track)
+    "MarkWarner",         # Sen. Mark Warner
     # (Massad Boulos and Steve Witkoff have no reliable public X account -> manual file)
     # Gulf / Arab foreign ministries and officials
     "MofaQatar_EN",       # Qatar MoFA, English (verify)
@@ -63,6 +66,8 @@ X_HANDLES = [
     "badralbusaidi",      # Badr Albusaidi, Oman Foreign Minister (verify)
     "PakPMO",             # Pakistan PM Office (verify)
     "Nechirvan_Barzani",  # Nechirvan Barzani, KRG President (verify)
+    "modgovksa",          # Saudi Ministry of Defense (cited in the human brief)
+    "MFA_China",          # Chinese Foreign Ministry spokesperson
     # Lebanon
     "LBpresidency",       # Lebanese Presidency (verify)
     "nawafsalam",         # Nawaf Salam, Lebanese PM (verify)
@@ -74,10 +79,11 @@ X_HANDLES = [
     "IDF",                # Israel Defense Forces
     # Iran
     "drpezeshkian",       # Masoud Pezeshkian (verify)
-    "ghalibaf_ir",        # Mohammad Bagher Ghalibaf (verify)
+    "mb_ghalibaf",        # Mohammad Bagher Ghalibaf (as cited in the human brief)
     "araghchi",           # Abbas Araghchi (verify)
+    "ir_rezaee",          # Mohsen Rezaee (cited in the human brief)
     # Maritime / shipping data
-    "UKMTO",              # UK Maritime Trade Operations (Strait of Hormuz advisories)
+    "UK_MTO",             # UK Maritime Trade Operations (as cited in the human brief)
     "WindwardAI",         # maritime-domain analytics
     "MarineTraffic",      # vessel tracking
     "Kpler",              # commodity and vessel-flow data
@@ -221,23 +227,105 @@ def from_x_syndication(handles=None, days=1, now=None):
     out = []
     for h in handles:
         try:
-            html = _get(_X_TIMELINE.format(urllib.parse.quote(h))).decode("utf-8", "ignore")
+            # short timeout: X blocks datacenter IPs, so these usually hang; don't waste the run
+            html = _get(_X_TIMELINE.format(urllib.parse.quote(h)), timeout=6).decode("utf-8", "ignore")
             out += _parse_x_timeline(html, h, days, now)
         except Exception as e:
             print(f"  [x] @{h} ERR: {e!r}")
     if out:
-        print(f"  [x]: {len(out)} items")
+        print(f"  [x]: {len(out)} items (free syndication)")
+    return out
+
+
+# --- X (paid scraper) -----------------------------------------------------
+# X killed its free API and blocks datacenter IPs, so the syndication pull above returns
+# nothing from GitHub Actions. A cheap per-use scraper (default: twitterapi.io, ~$0.15 per
+# 1,000 tweets) reliably pulls each official's recent posts WITH their text. Set X_SCRAPER_KEY
+# to enable it; it then replaces the free pull. X_SCRAPER_BASE overrides the vendor endpoint.
+
+_SCRAPER_BASE = os.environ.get("X_SCRAPER_BASE", "https://api.twitterapi.io")
+
+
+def _parse_scraper_time(s):
+    dt = _parse_x_time(s)                      # Twitter format (Tue Aug 25 12:00:00 +0000 2026)
+    if dt:
+        return dt
+    try:
+        return datetime.fromisoformat((s or "").replace("Z", "+00:00"))   # ISO 8601
+    except (ValueError, TypeError):
+        return None
+
+
+def _walk_x_objs(node, found):
+    """Recursively collect tweet-like dicts (a text field + an id field), schema-agnostic."""
+    if isinstance(node, dict):
+        if (node.get("text") or node.get("full_text")) and \
+           (node.get("id") or node.get("id_str") or node.get("tweet_id")):
+            found.append(node)
+        for v in node.values():
+            _walk_x_objs(v, found)
+    elif isinstance(node, list):
+        for v in node:
+            _walk_x_objs(v, found)
+
+
+def _parse_scraper(data, handle, days, now):
+    """Vendor JSON -> our records (windowed + keyword-filtered). The tweet text becomes both
+    the title and the summary, so the model can quote it."""
+    objs, out, seen = [], [], set()
+    _walk_x_objs(data, objs)
+    for tw in objs:
+        tid = str(tw.get("id") or tw.get("id_str") or tw.get("tweet_id") or "")
+        if not tid or tid in seen:
+            continue
+        seen.add(tid)
+        text = collect._clean(tw.get("text") or tw.get("full_text"))
+        if not text:
+            continue
+        created = tw.get("createdAt") or tw.get("created_at") or ""
+        when = _parse_scraper_time(created)
+        if when and when < _cutoff(days, now):
+            continue
+        if not collect._is_relevant(text):
+            continue
+        url = (tw.get("url") or f"https://x.com/{handle}/status/{tid}").strip()
+        out.append({
+            "source": f"@{handle} (X)", "collector": "X",
+            "title": text[:280], "url": url, "summary": text[:2000], "published": created,
+        })
+    return out
+
+
+def from_x_scraper(handles=None, days=1, now=None):
+    key = os.environ.get("X_SCRAPER_KEY")
+    if not key:
+        print("  [x] no X_SCRAPER_KEY; skipping paid X scraper")
+        return []
+    handles = X_HANDLES if handles is None else handles
+    now = now or datetime.now(timezone.utc)
+    out = []
+    for h in handles:
+        try:
+            url = f"{_SCRAPER_BASE}/twitter/user/last_tweets?userName={urllib.parse.quote(h)}"
+            req = urllib.request.Request(url, headers={"X-API-Key": key, "Accept": "application/json"})
+            data = json.loads(urllib.request.urlopen(req, timeout=15).read())
+            out += _parse_scraper(data, h, days, now)
+        except Exception as e:
+            print(f"  [x] @{h} ERR: {e!r}")
+    print(f"  [x]: {len(out)} items (paid scraper, {len(handles)} accounts)")
     return out
 
 
 # --- Combined -------------------------------------------------------------
 
 def collect_social(days=1):
-    """Both feeds, gated by SOCIAL_FEEDS. Returns a combined list (possibly empty)."""
+    """Truth Social + X, gated by SOCIAL_FEEDS. Uses the paid X scraper when X_SCRAPER_KEY is
+    set (reliable, with text), else the free syndication pull (usually empty from CI)."""
     if not ENABLED:
         print("  [social] disabled (SOCIAL_FEEDS=0)")
         return []
-    return from_truth_social(days=days) + from_x_syndication(days=days)
+    x = from_x_scraper(days=days) if os.environ.get("X_SCRAPER_KEY") else from_x_syndication(days=days)
+    return from_truth_social(days=days) + x
 
 
 # --- self-test (offline fixtures; no network) -----------------------------
@@ -275,5 +363,25 @@ if __name__ == "__main__":
     # Malformed input degrades to empty, never raises.
     assert _parse_x_timeline("<html>no next data</html>", "IDF", 3, now) == []
     assert _parse_truth_statuses([], "x", 1, now) == []
+
+    # Paid-scraper parser: schema-agnostic (tweets nested under data), text -> summary.
+    scraper_payload = {"status": "success", "data": {"tweets": [
+        {"id": "555", "text": "CENTCOM redirected 70 vessels and disabled 3 to enforce the blockade on Iran.",
+         "createdAt": "Sat Aug 09 08:00:00 +0000 2026",
+         "url": "https://x.com/CENTCOM/status/555"},
+        {"id": "556", "text": "Team dinner was great tonight.",
+         "createdAt": "Sat Aug 09 09:00:00 +0000 2026"},
+        {"id_str": "557", "full_text": "Old Hormuz note.",
+         "created_at": "2026-07-01T09:00:00Z"},
+    ]}}
+    sc = _parse_scraper(scraper_payload, "CENTCOM", days=3, now=now)
+    assert len(sc) == 1, sc                              # off-topic + stale dropped
+    assert sc[0]["url"] == "https://x.com/CENTCOM/status/555"
+    assert "70 vessels" in sc[0]["summary"] and sc[0]["collector"] == "X"
+    # id fallback builds the permalink when the vendor omits url
+    sc2 = _parse_scraper({"tweets": [{"id": "900", "text": "IDF struck targets in Lebanon.",
+                                      "createdAt": "Sat Aug 09 08:00:00 +0000 2026"}]},
+                         "IDF", days=3, now=now)
+    assert sc2 and sc2[0]["url"] == "https://x.com/IDF/status/900", sc2
 
     print("social.py self-test passed")
