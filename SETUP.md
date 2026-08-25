@@ -78,11 +78,17 @@ just so the team understands what is happening.
 
 **Step 1 — Collect.** The tool queries several free news sources (see
 [Section 6](#6-where-the-news-comes-from)), pulls back the day's candidate articles, removes
-duplicates by matching similar headlines (keeping the stronger outlet when a story appears
-twice), and saves the result both as the day's working list and into the permanent archive.
-It looks back **one day on Tuesday through Friday, and three days on Monday** so the Monday
-brief carries the whole weekend — Saturday, Sunday, and Monday morning up to the send. A
-typical run gathers a few hundred raw articles that collapse to a smaller deduplicated set.
+duplicates, and saves the result both as the day's working list and into the permanent
+archive. Duplicates are removed three ways so a story is reported once: identical headlines,
+the same underlying link, and **differently-worded headlines for the same event** (e.g. one
+outlet's "Israel strikes Hezbollah positions in south Lebanon" and another's "Israeli
+military strikes Hezbollah positions across southern Lebanon"), always keeping the stronger
+outlet. It also **drops any story already carried on an earlier day**, so the same item does
+not reappear in consecutive briefs. It looks back to the **start of the brief's own calendar
+day (U.S. Eastern) on Tuesday through Friday** — so a brief dated 8/25 is Tuesday-only — and
+**three days on Monday** so the Monday brief still carries the whole weekend (Saturday,
+Sunday, and Monday morning up to the send). A typical run gathers a few hundred raw articles
+that collapse to a smaller deduplicated set.
 It then cleans up the links (many news feeds hand back long redirect links; the tool
 converts them to the real publisher address, e.g. `reuters.com` or `aje.news`, so the final
 email carries clean, familiar source links). If a source is temporarily unavailable, the
@@ -214,9 +220,13 @@ The tool uses free, public, keyless sources, so there are no paid subscriptions 
   so bullets can carry real detail (quotes, figures, context) instead of just the headline.
   Paywalled outlets (WSJ, NYT, Haaretz, Washington Post) are skipped and keep their feed
   summary. Best-effort and cached; disable with `FULLTEXT=0`.
-- **Only same-day news.** Every item's publish date is checked against the day's window (today,
-  or the weekend on a Monday), so an old article that slips into a search result is dropped
+- **Only same-day news.** Every item's publish date is checked against the day's window — the
+  brief's own calendar day (U.S. Eastern), or the weekend on a Monday — so a brief dated 8/25
+  carries Tuesday's news only, and an old article that slips into a search result is dropped
   rather than showing up mis-dated in the brief.
+- **No repeats.** A story is folded to one bullet even when outlets word its headline
+  differently, and any item already carried on an earlier day is suppressed, so the same
+  development does not recur across consecutive briefs.
 - **U.S. Congress (official Library of Congress feed).** For the "U.S. Congress" section, the
   tool queries the government's own legislative feed (api.congress.gov) for recent bills whose
   title concerns Iran, and links each to its congress.gov page. This needs a free key (see
