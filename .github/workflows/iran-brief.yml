@@ -42,6 +42,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # Chromium for the Al Jazeera liveblog render (see _render_liveblog_html). Best-effort:
+          # if this fails the pipeline still runs, just without the browser-rendered liveblog.
+          python -m playwright install --with-deps chromium || \
+            echo "playwright chromium install failed; liveblog browser render disabled"
 
       - name: Run pipeline
         env:

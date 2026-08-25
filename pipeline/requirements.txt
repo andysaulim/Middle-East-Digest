@@ -1,1 +1,6 @@
 anthropic>=0.40
+# Headless browser used only to render the Al Jazeera liveblog (its updates load via
+# JavaScript). The Chromium binary is installed separately in the workflow with
+# `python -m playwright install --with-deps chromium`. If Playwright or the browser is
+# missing, the liveblog scrape degrades gracefully (see _render_liveblog_html).
+playwright>=1.40
