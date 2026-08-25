@@ -29,6 +29,7 @@ Stdlib only.
 import json
 import os
 import re
+import sqlite3
 import time
 import urllib.parse
 import urllib.request
@@ -320,6 +321,34 @@ def _scraper_get(url, key):
             raise
 
 
+# One paid X pull per calendar day: the result is cached in the archive DB (which persists
+# across runs) and reused on any further same-day run, so re-running the pipeline never
+# re-bills twitterapi.io for tweets we already have. Fetch afresh the next day. X_FORCE=1
+# overrides the cache; the cache is keyed by UTC date and old rows are pruned.
+def _x_cache_get(date_str):
+    try:
+        con = sqlite3.connect(collect.DB_PATH)
+        con.execute("CREATE TABLE IF NOT EXISTS social_cache (date TEXT PRIMARY KEY, items TEXT)")
+        row = con.execute("SELECT items FROM social_cache WHERE date=?", (date_str,)).fetchone()
+        con.close()
+        return json.loads(row[0]) if row and row[0] else None
+    except Exception:
+        return None
+
+
+def _x_cache_put(date_str, items):
+    try:
+        con = sqlite3.connect(collect.DB_PATH)
+        con.execute("CREATE TABLE IF NOT EXISTS social_cache (date TEXT PRIMARY KEY, items TEXT)")
+        con.execute("INSERT OR REPLACE INTO social_cache VALUES (?,?)",
+                    (date_str, json.dumps(items, ensure_ascii=False)))
+        con.execute("DELETE FROM social_cache WHERE date < ?", (date_str,))   # keep only today
+        con.commit()
+        con.close()
+    except Exception:
+        pass
+
+
 def from_x_scraper(handles=None, days=1, now=None):
     key = os.environ.get("X_SCRAPER_KEY")
     if not key:
@@ -327,6 +356,14 @@ def from_x_scraper(handles=None, days=1, now=None):
         return []
     handles = X_HANDLES if handles is None else handles
     now = now or datetime.now(timezone.utc)
+    date_str = now.strftime("%Y-%m-%d")
+
+    if os.environ.get("X_FORCE") != "1":
+        cached = _x_cache_get(date_str)
+        if cached is not None:
+            print(f"  [x]: {len(cached)} items (reused today's cached pull; X_FORCE=1 to refetch)")
+            return cached
+
     out, errors = [], 0
     for i, h in enumerate(handles):
         if i:
@@ -334,9 +371,20 @@ def from_x_scraper(handles=None, days=1, now=None):
         try:
             url = f"{_SCRAPER_BASE}/twitter/user/last_tweets?userName={urllib.parse.quote(h)}"
             out += _parse_scraper(_scraper_get(url, key), h, days, now)
+        except urllib.error.HTTPError as e:
+            errors += 1
+            print(f"  [x] @{h} ERR: {e!r}")
+            if e.code in (401, 402):              # auth / out-of-credit is account-wide:
+                print(f"  [x] {e.code} is account-wide; stopping (remaining accounts skipped)")
+                break
         except Exception as e:
             errors += 1
             print(f"  [x] @{h} ERR: {e!r}")
+
+    # Cache only a successful pull, so a failed/empty run (e.g. out of credit) doesn't poison
+    # the day and block a later retry once the account is topped up.
+    if out:
+        _x_cache_put(date_str, out)
     print(f"  [x]: {len(out)} items (paid scraper, {len(handles)} accounts, {errors} errors)")
     return out
 
@@ -408,5 +456,18 @@ if __name__ == "__main__":
                                       "createdAt": "Sat Aug 09 08:00:00 +0000 2026"}]},
                          "IDF", days=3, now=now)
     assert sc2 and sc2[0]["url"] == "https://x.com/IDF/status/900", sc2
+
+    # Once-per-day X cache (temp DB so the real archive is untouched): store, reuse, prune.
+    import tempfile
+    _orig_db = collect.DB_PATH
+    collect.DB_PATH = tempfile.mktemp(suffix=".db")
+    try:
+        assert _x_cache_get("2026-08-25") is None
+        _x_cache_put("2026-08-25", sc)
+        assert _x_cache_get("2026-08-25") == sc
+        _x_cache_put("2026-08-26", sc2)                  # newer day prunes the older row
+        assert _x_cache_get("2026-08-25") is None and _x_cache_get("2026-08-26") == sc2
+    finally:
+        collect.DB_PATH = _orig_db
 
     print("social.py self-test passed")
