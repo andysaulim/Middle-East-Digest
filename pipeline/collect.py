@@ -684,10 +684,17 @@ def from_aljazeera_liveblog(page_url):
     # a __NEXT_DATA__ state blob, an embedded post id) and we can target that endpoint directly.
     if len(out) < 5:
         low = html.lower()
+
+        def _ctx(needle, width=220):
+            idx = low.find(needle.lower())
+            if idx < 0:
+                return "-"
+            return re.sub(r"\s+", " ", html[max(0, idx - 50): idx + width]).strip()[:width]
+
         api = ""
-        m = re.search(r'https?://[^"\']*(?:graphql|/api/)[^"\']*', html)
+        m = re.search(r'https?://[^"\'\\ ]*(?:graphql|/api/)[^"\'\\ ]*', html)
         if m:
-            api = m.group(0)[:200]
+            api = m.group(0)[:220]
         pid = ""
         pm = re.search(r'"(?:postId|post_id|liveBlogId|id)"\s*:\s*"?(\d{5,})', html)
         if pm:
@@ -696,6 +703,10 @@ def from_aljazeera_liveblog(page_url):
               f"liveBlogUpdate={html.count('liveBlogUpdate')} __NEXT_DATA__={'__NEXT_DATA__' in html} "
               f"graphql={low.count('graphql')} p_tags={html.count('<p')} scripts={html.count('<script')} "
               f"postid={pid or '-'} api={api or '-'}")
+        # Dump the context around the API markers so the exact endpoint/operation/persisted-query
+        # hash is visible in the log, and we can call the GraphQL update feed directly next.
+        for needle in ("graphql", "operationName", "sha256Hash", "wp-json", "liveblog-update"):
+            print(f"  [aje-live] CTX {needle}: {_ctx(needle)}")
     return out
 
 
