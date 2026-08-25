@@ -87,8 +87,9 @@ X_HANDLES = [
     # Maritime / shipping data
     "UK_MTO",             # UK Maritime Trade Operations (as cited in the human brief)
     "WindwardAI",         # maritime-domain analytics
-    "MarineTraffic",      # vessel tracking
-    "Kpler",              # commodity and vessel-flow data
+    # NOTE: @MarineTraffic and @Kpler are commercial accounts the scraper returns 402
+    # (Payment Required) for; dropped to avoid per-run errors. Their transit/flow figures
+    # still reach the brief through Kpler/UKMTO news items.
 ]
 # Truth Social accounts without the @. Unauthenticated pull works for allowed accounts
 # (Trump, Vance); others would need a logged-in token and are better left to the manual file.

@@ -591,19 +591,65 @@ def _content_anchor(text):
     return hashlib.sha1((text or "").encode("utf-8", "ignore")).hexdigest()[:10]
 
 
+def _render_liveblog_html(page_url, scrolls=8, timeout=30000):
+    """Load the liveblog in a headless browser so its JavaScript runs and the updates render,
+    then return the fully-rendered HTML for the normal parser. Al Jazeera builds the update
+    feed client-side (the GraphQL query and its hash live inside minified JS, not the HTML), so
+    a plain fetch never sees the updates; executing the page is the only reliable way in. Scroll
+    to trigger the liveblog's lazy-loading of older updates. Best-effort: returns None if
+    Playwright/Chromium is unavailable or anything fails, so the pipeline degrades gracefully."""
+    if os.environ.get("LIVEBLOG_BROWSER", "1") == "0":
+        return None
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:
+        print(f"  [aje-live] browser unavailable ({e!r}); install playwright + chromium")
+        return None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+            try:
+                page = browser.new_page(user_agent=UA.get("User-Agent"))
+                page.goto(page_url, wait_until="domcontentloaded", timeout=timeout)
+                page.wait_for_timeout(2500)          # let the first updates hydrate
+                for _ in range(scrolls):              # pull in older updates
+                    page.mouse.wheel(0, 24000)
+                    page.wait_for_timeout(1200)
+                return page.content()
+            finally:
+                browser.close()
+    except Exception as e:
+        print(f"  [aje-live] browser render ERR: {e!r}")
+        return None
+
+
 def from_aljazeera_liveblog(page_url):
     """Scrape one Al Jazeera liveblog for its individual updates (heading + text + time).
 
     The Iran-war liveblog is the human tracker's backbone (~77% of its links). Each update
-    carries the quotes and figures the brief needs. Prefer the page's LiveBlogPosting JSON-LD
-    (structured: headline, articleBody, datePublished, url per update); fall back to splitting
-    the rendered HTML on update headings. Best-effort — returns [] on any failure."""
+    carries the quotes and figures the brief needs. First parse the plain HTML; if that is thin
+    (Al Jazeera renders the update feed client-side), re-parse the browser-rendered HTML so the
+    JavaScript-loaded updates are captured. Best-effort — returns [] on any failure."""
     try:
         html = _fetch(page_url).decode("utf-8", "ignore")
     except Exception as e:
         print(f"  [aje-live] {page_url} ERR: {e!r}")
         return []
 
+    out = _parse_liveblog_html(html, page_url)
+    # Plain HTML rarely carries the updates (they load via JS), so render and re-parse when thin.
+    if len(out) < 5:
+        rendered = _render_liveblog_html(page_url)
+        if rendered:
+            more = _parse_liveblog_html(rendered, page_url, source="browser")
+            if len(more) > len(out):
+                out = more
+    return out
+
+
+def _parse_liveblog_html(html, page_url, source="static"):
+    """Extract liveblog updates from a page's HTML (static or browser-rendered). Tries the
+    structured LiveBlogPosting data, then update headings, then on-topic paragraph chunks."""
     out, seen, content_seen = [], set(), set()
     jsonld_seen = 0
     n_struct = 0
@@ -617,10 +663,12 @@ def from_aljazeera_liveblog(page_url):
     blobs = list(_JSONLD_RE.findall(html)) + list(_NEXTDATA_RE.findall(html))
     if "liveBlogUpdate" in html:
         blobs += [s for s in _SCRIPT_RE.findall(html) if "liveBlogUpdate" in s]
+    seen_blobs = set()
     for blob in blobs:
         blob = blob.strip()
-        if "liveBlogUpdate" not in blob:
+        if "liveBlogUpdate" not in blob or blob in seen_blobs:
             continue
+        seen_blobs.add(blob)
         try:
             data = json.loads(blob)
         except ValueError:
@@ -675,38 +723,9 @@ def from_aljazeera_liveblog(page_url):
     # low, updates are present but being filtered; if all paths are ~0, the updates load via an
     # API/JS and the fetched HTML doesn't carry them (then we add that endpoint).
     slug = page_url.rsplit('/', 1)[-1][:40]
-    print(f"  [aje-live] {slug}: {len(out)} updates "
+    print(f"  [aje-live] {slug} [{source}]: {len(out)} updates "
           f"(struct={n_struct} [jsonld_raw={jsonld_seen}], headings={n_headings}, "
           f"paras={n_paras})")
-
-    # When extraction came up thin, the updates almost certainly load client-side. Log what the
-    # fetched HTML actually contains so the next run reveals the mechanism (a GraphQL/API URL,
-    # a __NEXT_DATA__ state blob, an embedded post id) and we can target that endpoint directly.
-    if len(out) < 5:
-        low = html.lower()
-
-        def _ctx(needle, width=220):
-            idx = low.find(needle.lower())
-            if idx < 0:
-                return "-"
-            return re.sub(r"\s+", " ", html[max(0, idx - 50): idx + width]).strip()[:width]
-
-        api = ""
-        m = re.search(r'https?://[^"\'\\ ]*(?:graphql|/api/)[^"\'\\ ]*', html)
-        if m:
-            api = m.group(0)[:220]
-        pid = ""
-        pm = re.search(r'"(?:postId|post_id|liveBlogId|id)"\s*:\s*"?(\d{5,})', html)
-        if pm:
-            pid = pm.group(1)
-        print(f"  [aje-live] DIAG {slug}: html={len(html)}B ld+json={html.count('application/ld+json')} "
-              f"liveBlogUpdate={html.count('liveBlogUpdate')} __NEXT_DATA__={'__NEXT_DATA__' in html} "
-              f"graphql={low.count('graphql')} p_tags={html.count('<p')} scripts={html.count('<script')} "
-              f"postid={pid or '-'} api={api or '-'}")
-        # Dump the context around the API markers so the exact endpoint/operation/persisted-query
-        # hash is visible in the log, and we can call the GraphQL update feed directly next.
-        for needle in ("graphql", "operationName", "sha256Hash", "wp-json", "liveblog-update"):
-            print(f"  [aje-live] CTX {needle}: {_ctx(needle)}")
     return out
 
 
@@ -975,6 +994,20 @@ def _selftest():
         ]}, "https://www.aljazeera.com/news/liveblog/2026/8/25/s", out, seen, cseen)
     assert n == 2 and len(out) == 2, (n, out)
     assert _norm_url(out[0]["url"]) != _norm_url(out[1]["url"]), out
+
+    # End-to-end parse of a page whose LiveBlogPosting ld+json carries the updates (this is what
+    # the browser-rendered HTML looks like once Al Jazeera's JS has run).
+    page = "https://www.aljazeera.com/news/liveblog/2026/8/25/iran-war-live-drat"
+    ld = json.dumps({"@type": "LiveBlogPosting", "liveBlogUpdate": [
+        {"headline": "Kpler says fewer than 20 vessels transited the Strait of Hormuz",
+         "articleBody": "The ship tracker reported the weekend total, a fraction of normal flows.",
+         "url": page + "?update=4880201"},
+        {"headline": "IRGC warns of heavy attacks on US energy chokepoints",
+         "articleBody": "A spokesman said Iran would respond if its infrastructure is hit.",
+         "url": page + "?update=4880837"}]})
+    html = f'<html><head><script type="application/ld+json">{ld}</script></head><body></body></html>'
+    parsed = _parse_liveblog_html(html, page)
+    assert len(parsed) == 2 and all("aljazeera" in p["url"] for p in parsed), parsed
     print("collect.py self-test passed")
 
 
