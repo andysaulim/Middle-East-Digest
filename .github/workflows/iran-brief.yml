@@ -12,6 +12,11 @@ on:
     # ~50 min early and off the top of the hour to land the brief around 9:00 AM ET.
     - cron: "10 12 * * 1-5"
   workflow_dispatch:
+    inputs:
+      digest_to:
+        description: "Override recipient(s) for this run only (comma-separated). Blank = default list."
+        required: false
+        default: ""
 
 # Needed so the "Commit archive" step can push data/archive.db back to the branch.
 permissions:
@@ -61,7 +66,9 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
           GMAIL_FROM: ${{ secrets.GMAIL_FROM }}
-          DIGEST_TO: ${{ secrets.DIGEST_TO }}
+          # Manual runs can override the recipient via the digest_to input (send just to
+          # yourself for a test); a blank input falls back to the default DIGEST_TO list.
+          DIGEST_TO: ${{ github.event.inputs.digest_to || secrets.DIGEST_TO }}
           # Generic SMTP delivery (original Iran config; used only if Gmail is unset).
           REVIEWER_EMAIL: ${{ secrets.REVIEWER_EMAIL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
