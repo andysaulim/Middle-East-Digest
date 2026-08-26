@@ -99,10 +99,15 @@ Produce the day's brief. Steps:
    claim carried only by an unfamiliar, low-authority, or non-news site (a blog, an SEO/
    aggregator domain, a company marketing page) with suspicion: drop it unless a tiered
    outlet corroborates it, rather than build a bullet on it alone.
-   RECENCY: each item carries a "published" date and the input is already filtered to the
-   brief's own day (the weekend on a Monday). Include only developments from that window;
-   drop anything clearly older even if it appears in the input, and date each item
-   ("On [Weekday]") from its "published" value, not a guess.
+   RECENCY: this is a DAILY update — include only developments that are NEW since the last
+   brief. Date each item ("On [Weekday]") by when the EVENT happened, not when an outlet
+   published a recap. Then DROP any development whose event is two or more days before today
+   (the date is given below): a "Monday" item in a Wednesday brief is old news that was
+   already covered, even if a fresh article re-reports it today — omit it unless today brought
+   a genuinely new element (a new figure, a new named target, a new official response), in
+   which case report only that new element. Keep events from today and the day before. The
+   one exception: a Monday brief covers the whole weekend, so Saturday and Sunday events are
+   new there. When in doubt about whether an older event is genuinely new today, leave it out.
 3. CATEGORIZE under these headers. ALWAYS include these four, in this order, even with no
    news: US, Iran, Lebanon, Israel. Then include any of these country headers ONLY IF they
    have Iran-war-relevant news, in this exact order: Bahrain, Egypt, Iraq, Jordan, Kuwait,
@@ -252,8 +257,10 @@ def _generate(client, model, slim, date_label):
         system=SYSTEM_PROMPT,
         messages=[{
             "role": "user",
-            "content": (f"Today is {date_label}. Here are {len(slim)} candidate items "
-                        f"as JSON:\n\n{json.dumps(slim, ensure_ascii=False)}"),
+            "content": (f"Today is {date_label}. Use only the M/D part in the header line. "
+                        f"Apply the RECENCY rule against today's weekday: drop developments "
+                        f"whose event is two or more days before today. Here are {len(slim)} "
+                        f"candidate items as JSON:\n\n{json.dumps(slim, ensure_ascii=False)}"),
         }],
     )
     try:
@@ -306,7 +313,9 @@ def build_brief():
             for it in pool[:MAX_CANDIDATES]]
 
     today = datetime.now(timezone.utc)
-    date_label = f"{today.month}/{today.day}"
+    # Include the weekday so the model can apply the RECENCY rule (drop events 2+ days old);
+    # the user message tells it to use only the M/D part for the header line.
+    date_label = f"{today.strftime('%A')}, {today.month}/{today.day}"
 
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
 
