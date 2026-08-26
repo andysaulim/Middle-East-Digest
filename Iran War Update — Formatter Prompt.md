@@ -33,10 +33,13 @@ brief's own date. Many are duplicate reports of the same event from different ou
      carried only by an unfamiliar, low-authority, or non-news site (a blog, an SEO or
      aggregator domain, a company marketing page) with suspicion; drop it unless a tiered
      outlet corroborates it.
-   - **Recency:** the input is filtered to the brief's own calendar day (the weekend on a
-     Monday), so a brief dated 8/25 carries Tuesday's developments only. Each item still
-     carries a `published` date: drop anything clearly older that slips through, and date
-     each item ("On [Weekday]") from its `published` value, not a guess.
+   - **Recency:** this is a daily update, so include only developments **new since the last
+     brief**. Date each item ("On [Weekday]") by when the **event** happened, not when an
+     outlet published a recap, then **drop any development whose event is two or more days
+     before today** (e.g. a "Monday" item in a Wednesday brief) — that is old news already
+     covered, even when a fresh article re-reports it. Include it only if today brought a
+     genuinely new element, and then report only that new element. The one exception: a Monday
+     brief covers the whole weekend, so Saturday and Sunday events are new there.
 3. **Categorize.** Always include these four headers, in this order, even with no news:
    **US, Iran, Lebanon, Israel.** Then include any of these country headers **only if** it
    has Iran-war-relevant news, in this order: **Bahrain, Egypt, Iraq, Jordan, Kuwait, Oman,
