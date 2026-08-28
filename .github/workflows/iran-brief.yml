@@ -11,6 +11,10 @@ on:
     # scheduled runs (often 30-60+ min) and the pipeline itself takes ~15 min, so we start
     # ~50 min early and off the top of the hour to land the brief around 9:00 AM ET.
     - cron: "10 12 * * 1-5"
+    # Backup slot ~an hour later. GitHub can DROP the first slot entirely; this catches that.
+    # The once-per-day delivery guard (deliver.py) makes it a no-op when the first slot already
+    # sent, so at most one brief goes out per calendar day.
+    - cron: "10 13 * * 1-5"
   workflow_dispatch:
     inputs:
       digest_to:
@@ -69,6 +73,10 @@ jobs:
           # Manual runs can override the recipient via the digest_to input (send just to
           # yourself for a test); a blank input falls back to the default DIGEST_TO list.
           DIGEST_TO: ${{ github.event.inputs.digest_to || secrets.DIGEST_TO }}
+          # An override run (a manual test to a custom recipient) is a resend: it bypasses the
+          # once-per-day delivery guard and does not mark the day delivered, so it neither is
+          # blocked by nor blocks the real scheduled send. Empty for scheduled/normal runs.
+          ALLOW_RESEND: ${{ github.event.inputs.digest_to != '' && '1' || '' }}
           # Generic SMTP delivery (original Iran config; used only if Gmail is unset).
           REVIEWER_EMAIL: ${{ secrets.REVIEWER_EMAIL }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}

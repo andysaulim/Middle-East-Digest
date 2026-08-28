@@ -30,6 +30,7 @@ prints the path for you to open and send yourself.
 import os
 import json
 import smtplib
+import sqlite3
 import sys
 import urllib.parse
 import urllib.request
@@ -38,7 +39,53 @@ from email.utils import formatdate
 from datetime import datetime, timezone
 from pathlib import Path
 
+import collect  # reuse the archive DB path and the ET timezone
+
 OUT_DIR = Path(__file__).parent / "out"
+
+
+# --- Once-per-day delivery guard ---------------------------------------------
+# GitHub Actions schedules are best-effort: a slot can be DROPPED and then fired hours late,
+# and we added a backup cron, so the brief can be triggered more than once on the same day.
+# To email the team at most once per calendar day we record the date we delivered in the
+# archive DB (which persists across runs, like social.py's X cache). A later run that same day
+# skips the send. A manual override run (ALLOW_RESEND=1, set by the workflow when a digest_to
+# recipient override is given, i.e. a test to yourself) always sends and never marks the day
+# delivered, so it neither is blocked by nor blocks the real scheduled send.
+
+def _brief_date_str(now=None):
+    """The brief's own date (America/New_York calendar day) as YYYY-MM-DD — the guard key."""
+    now = now or datetime.now(timezone.utc)
+    return now.astimezone(collect._ET).strftime("%Y-%m-%d")
+
+
+def _delivered_today(date_str):
+    try:
+        con = sqlite3.connect(collect.DB_PATH)
+        con.execute("CREATE TABLE IF NOT EXISTS delivered (date TEXT PRIMARY KEY)")
+        row = con.execute("SELECT 1 FROM delivered WHERE date=?", (date_str,)).fetchone()
+        con.close()
+        return row is not None
+    except Exception:
+        return False
+
+
+def _mark_delivered(date_str):
+    try:
+        con = sqlite3.connect(collect.DB_PATH)
+        con.execute("CREATE TABLE IF NOT EXISTS delivered (date TEXT PRIMARY KEY)")
+        con.execute("INSERT OR REPLACE INTO delivered VALUES (?)", (date_str,))
+        con.execute("DELETE FROM delivered WHERE date < ?", (date_str,))   # keep only today
+        con.commit()
+        con.close()
+    except Exception:
+        pass
+
+
+def _is_override_run():
+    """True for a manual test run whose recipients were overridden (ALLOW_RESEND=1): it always
+    sends and is exempt from the guard, so it never blocks or is blocked by the scheduled send."""
+    return os.environ.get("ALLOW_RESEND", "") not in ("", "0", "false", "False")
 
 
 def latest_html():
@@ -102,6 +149,16 @@ def deliver(html_path=None, subject=None):
     recipients = _recipients()
     subject = subject or f"[DRAFT] Iran War Update ({datetime.now(timezone.utc).strftime('%m/%d')})"
 
+    # Once-per-day guard: skip a real send if today's brief already went out, unless this is a
+    # manual override/resend run. (Local mode below is not a send, so it is never guarded.)
+    override = _is_override_run()
+    today = _brief_date_str()
+    guard_on = recipients and not override
+    if guard_on and _delivered_today(today):
+        print(f"Already delivered the brief for {today}; skipping duplicate send "
+              "(set ALLOW_RESEND=1 to force). No email sent.")
+        return
+
     # 0) Outlook / Microsoft Graph draft (preferred when fully configured). Best-effort: on
     #    any error, log and fall through to Gmail so a misconfigured Graph never drops the run.
     ms_tenant = os.environ.get("MS_TENANT_ID")
@@ -113,6 +170,8 @@ def deliver(html_path=None, subject=None):
             token = _graph_token(ms_tenant, ms_client, ms_secret)
             _create_outlook_draft(html, subject, recipients, ms_mailbox, token)
             print(f"Draft created in Outlook mailbox {ms_mailbox} via Microsoft Graph")
+            if not override:
+                _mark_delivered(today)
             return
         except Exception as e:
             print(f"Outlook/Graph delivery failed ({e!r}); falling back to Gmail/SMTP.")
@@ -132,6 +191,8 @@ def deliver(html_path=None, subject=None):
             s.login(gmail_user, gmail_pass)
             s.send_message(msg)
         print(f"Draft emailed to {', '.join(recipients)} via Gmail ({gmail_user})")
+        if not override:
+            _mark_delivered(today)
         return
 
     # 2) Generic SMTP (original Iran config).
@@ -144,6 +205,8 @@ def deliver(html_path=None, subject=None):
             s.login(smtp_user, smtp_pass)
             s.send_message(msg)
         print(f"Draft emailed to {', '.join(recipients)} via {smtp_host}")
+        if not override:
+            _mark_delivered(today)
         return
 
     # 4) Local mode.
@@ -154,5 +217,33 @@ def deliver(html_path=None, subject=None):
     print(f"  {html_path}")
 
 
+def _selftest():
+    """Offline test of the once-per-day guard against a throwaway DB (no network, no send)."""
+    import tempfile
+    orig_db = collect.DB_PATH
+    collect.DB_PATH = tempfile.mktemp(suffix=".db")
+    try:
+        assert not _delivered_today("2026-08-27")
+        _mark_delivered("2026-08-27")
+        assert _delivered_today("2026-08-27")
+        # A newer day prunes the older row (the table holds only the latest delivered date).
+        _mark_delivered("2026-08-28")
+        assert _delivered_today("2026-08-28") and not _delivered_today("2026-08-27")
+        # Override detection.
+        for v in ("", "0", "false", "False"):
+            os.environ["ALLOW_RESEND"] = v
+            assert not _is_override_run(), v
+        for v in ("1", "true", "yes"):
+            os.environ["ALLOW_RESEND"] = v
+            assert _is_override_run(), v
+        os.environ.pop("ALLOW_RESEND", None)
+    finally:
+        collect.DB_PATH = orig_db
+    print("deliver.py self-test passed")
+
+
 if __name__ == "__main__":
-    deliver(sys.argv[1] if len(sys.argv) > 1 else None)
+    if len(sys.argv) > 1 and sys.argv[1] == "--selftest":
+        _selftest()
+    else:
+        deliver(sys.argv[1] if len(sys.argv) > 1 else None)
