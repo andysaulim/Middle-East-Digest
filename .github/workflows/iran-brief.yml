@@ -11,10 +11,15 @@ on:
     # scheduled runs (often 30-60+ min) and the pipeline itself takes ~15 min, so we start
     # ~50 min early and off the top of the hour to land the brief around 9:00 AM ET.
     - cron: "10 12 * * 1-5"
-    # Backup slot ~an hour later. GitHub can DROP the first slot entirely; this catches that.
-    # The once-per-day delivery guard (deliver.py) makes it a no-op when the first slot already
-    # sent, so at most one brief goes out per calendar day.
+    # Backup slots at ~1, 2, and 3 hours later. GitHub's scheduled crons are best-effort and can
+    # DROP a slot — or, as on 2026-08-28, every slot in a morning — so we stagger several attempts.
+    # The once-per-day delivery guard (deliver.py) makes each later slot a no-op once one has
+    # already sent, so at most one brief goes out per calendar day no matter how many slots fire.
+    # These GitHub crons are a free redundant layer; the reliable trigger is the external
+    # scheduler in docs/RELIABLE_SCHEDULING.md, which hits workflow_dispatch on time.
     - cron: "10 13 * * 1-5"
+    - cron: "10 14 * * 1-5"
+    - cron: "10 15 * * 1-5"
   workflow_dispatch:
     inputs:
       digest_to:
