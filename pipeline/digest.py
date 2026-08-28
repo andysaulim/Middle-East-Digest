@@ -116,6 +116,13 @@ Produce the day's brief. Steps:
    essential header (or General) with no development today, write the header followed by a
    single bullet exactly: "- Nothing to Report." OMIT a conditional country header entirely
    when it has no news — do not write a placeholder for it.
+   THRESHOLD for a conditional country header: give a conditional country its own header only
+   when it has a substantial block — roughly three or more item bullets, or a single major
+   development. If a conditional country has only one or two minor items, do NOT open a header
+   for it; fold those items into General instead (each still a normal bullet, naming the
+   country in the text). This keeps the brief from sprouting thin one- or two-line country
+   sections. The four essential headers (US, Iran, Lebanon, Israel) are exempt — they always
+   appear regardless of how many bullets they carry.
 4. WRITE each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
    - Put the source hyperlink on the reporting verb, Markdown style: [said](url).
    - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
