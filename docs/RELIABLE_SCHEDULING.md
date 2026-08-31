@@ -72,9 +72,12 @@ Any scheduler that can send a POST with custom headers works. A free, no-infra o
 
 1. Create an account, then **Create cronjob**.
 2. **URL:** the dispatch endpoint above.
-3. **Schedule:** every weekday at **08:10** in timezone **America/New_York**. Picking the ET
-   timezone (not UTC) means the service handles the EDT/EST switch for you, so the brief keeps
-   landing at the same local time year-round — something the fixed-UTC GitHub crons cannot do.
+3. **Schedule:** every weekday at **08:40** in timezone **America/New_York**. An external
+   trigger fires on time (unlike GitHub's crons, which we started ~50 min early to absorb their
+   delay), and the pipeline takes ~15 min, so 08:40 lands the brief around 9:00 AM ET. Pick an
+   earlier time if you'd rather it arrive sooner. Picking the ET timezone (not UTC) means the
+   service handles the EDT/EST switch for you, so the brief keeps landing at the same local
+   time year-round — something the fixed-UTC GitHub crons cannot do.
 4. **Request method:** `POST`.
 5. **Headers:** add the four headers listed above (put the token in `Authorization`).
 6. **Body:** `{"ref": "main"}`.
