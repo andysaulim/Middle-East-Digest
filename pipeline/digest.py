@@ -45,6 +45,64 @@ OUT_DIR.mkdir(exist_ok=True)
 # Fast first attempt, stronger model on a validation-failure retry (Korea/Japan pattern).
 FAST_MODEL = os.environ.get("IRAN_BRIEF_MODEL", "claude-sonnet-5")
 PRIMARY_MODEL = os.environ.get("IRAN_BRIEF_PRIMARY_MODEL", "claude-opus-4-8")
+
+# Per-call token ledger, for metrics.jsonl and cost_report.py. The API's own
+# usage numbers were returned on every call and discarded, so what a brief cost
+# could not be answered after the fact.
+TOKEN_LEDGER: list[dict] = []
+
+# USD per million tokens. Update alongside FAST_MODEL / PRIMARY_MODEL.
+MODEL_PRICING = {
+    "claude-opus-5":     {"input": 5.00, "output": 25.00, "cache_write": 6.25, "cache_read": 0.50},
+    "claude-sonnet-5":   {"input": 2.00, "output": 10.00, "cache_write": 2.50, "cache_read": 0.20},
+    "claude-opus-4-8":   {"input": 5.00, "output": 25.00, "cache_write": 6.25, "cache_read": 0.50},
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00, "cache_write": 3.75, "cache_read": 0.30},
+}
+
+
+def cost_of(entry: dict) -> float:
+    """USD for one call. An unpriced model bills at the Opus rate rather than
+    zero: a silent nought in a cost report is worse than an overestimate."""
+    p = MODEL_PRICING.get(entry.get("model", ""),
+                          {"input": 5.0, "output": 25.0, "cache_write": 6.25, "cache_read": 0.5})
+    return (entry.get("input", 0) * p["input"]
+            + entry.get("output", 0) * p["output"]
+            + entry.get("cache_write", 0) * p["cache_write"]
+            + entry.get("cache_read", 0) * p["cache_read"]) / 1_000_000
+
+
+def run_cost() -> float:
+    return round(sum(cost_of(e) for e in TOKEN_LEDGER), 4)
+
+
+def get_run_usage() -> dict:
+    """Aggregate this run's usage, for metrics.jsonl."""
+    return {
+        "api_calls": len(TOKEN_LEDGER),
+        "input_tokens": sum(e.get("input", 0) for e in TOKEN_LEDGER),
+        "output_tokens": sum(e.get("output", 0) for e in TOKEN_LEDGER),
+        "cache_write_tokens": sum(e.get("cache_write", 0) for e in TOKEN_LEDGER),
+        "cache_read_tokens": sum(e.get("cache_read", 0) for e in TOKEN_LEDGER),
+        "est_cost_usd": run_cost(),
+    }
+
+
+def _record_usage(msg, model: str) -> None:
+    """Append one call's tokens to the ledger. Never raises: a cost record must
+    not be able to break a brief."""
+    try:
+        u = getattr(msg, "usage", None)
+        if u is None:
+            return
+        TOKEN_LEDGER.append({
+            "model": model,
+            "input": getattr(u, "input_tokens", 0) or 0,
+            "output": getattr(u, "output_tokens", 0) or 0,
+            "cache_write": getattr(u, "cache_creation_input_tokens", 0) or 0,
+            "cache_read": getattr(u, "cache_read_input_tokens", 0) or 0,
+        })
+    except Exception:
+        pass
 MAX_ATTEMPTS = 3       # 1 fast attempt + up to 2 escalated retries
 MAX_CANDIDATES = 300   # cap items sent to the model (interleaved across topics first)
 
@@ -274,6 +332,7 @@ def _generate(client, model, slim, date_label):
         msg = client.messages.create(thinking={"type": "disabled"}, **create_kwargs)
     except anthropic.BadRequestError:
         msg = client.messages.create(**create_kwargs)
+    _record_usage(msg, model)
     # The model may emit a thinking block before the answer, so content[0] is not
     # necessarily the text. Concatenate every text block and ignore the rest.
     text = "".join(

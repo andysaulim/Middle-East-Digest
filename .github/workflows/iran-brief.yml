@@ -125,10 +125,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/archive.db
+          # metrics.jsonl carries the per-run token counts and API cost, one
+          # line per run. Committed rather than left on the runner, so the
+          # spend history survives; job logs expire and take it with them.
+          git add data/archive.db metrics.jsonl
           if git diff --cached --quiet; then
-            echo "No archive changes to commit."
+            echo "No archive or metrics changes to commit."
           else
-            git commit -m "chore: update news archive ($(date -u +%Y-%m-%d))"
+            git commit -m "chore: update news archive + run metrics ($(date -u +%Y-%m-%d))"
             git push
           fi
