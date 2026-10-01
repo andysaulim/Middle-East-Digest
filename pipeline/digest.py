@@ -232,6 +232,8 @@ No em-dashes. Numerals for specific figures.
 
 Output ONLY the finished brief in Markdown, starting with the line:
 **Some updates on the Iran war (M/D):**
+Write every section header as bold text on its own line, exactly like **US** and **Iran**.
+Do NOT use Markdown "#"/"##" heading syntax for the section headers.
 Use the date the user gives you. No preamble, no commentary after.
 """
 
@@ -258,11 +260,37 @@ def _interleave(items):
 
 
 def _header_name(line):
-    """If a line is a bold section header (**X**, no link), return X; else None."""
+    """Return a section header's name, or None if the line is not a header.
+
+    Recognizes both house-style bold headers (**US**) and Markdown ATX headers
+    (## US, ### US), with or without surrounding bold. The model's header
+    formatting drifts between these, and the old bold-only match meant an
+    all-ATX draft was parsed as having NO headers, so every bullet was dropped
+    and the brief shipped empty (the 2026-10-01 failure). A line carrying a
+    link, or a list bullet, is never a header."""
     s = line.strip()
-    if s.startswith("**") and s.endswith("**") and "](" not in s and len(s) > 4:
-        return s.strip("*").strip()
-    return None
+    if not s or "](" in s or s.startswith(("-", "*   ", "* ")):
+        return None
+    m = re.match(r"^#{1,6}\s+(.+)$", s)      # ATX: strip leading #'s
+    if m:
+        s = m.group(1).strip()
+    if s.startswith("**") and s.endswith("**") and len(s) > 4:
+        s = s.strip("*").strip()
+        return s or None
+    return s if m else None                   # bare text is a header only via ATX
+
+
+def _real_bullets(brief_md):
+    """Count substantive bullets (ignoring the 'Nothing to Report.' placeholder), so we can
+    tell an empty brief from one with real content regardless of header formatting."""
+    n = 0
+    for ln in brief_md.splitlines():
+        s = ln.strip()
+        # A list item is a marker (- or *) followed by whitespace; this excludes bold
+        # headers like **US**, which also start with '*'.
+        if re.match(r"^[-*]\s+", s) and "nothing to report" not in s.lower():
+            n += 1
+    return n
 
 
 def ensure_sections(brief_md):
@@ -429,7 +457,16 @@ def build_brief():
     # then append the deterministic tail sections (rendered from source, never the model,
     # so the brief can't invent a bill, a date, or a historical event): U.S. Congress, then
     # "This day in history," then the curated "Dates ahead."
-    brief_md = ensure_sections(brief_md)
+    # Safety net: section assembly must never silently drop a brief's content. If the
+    # validated draft had real bullets but assembly produced an all-"Nothing to Report."
+    # skeleton (e.g. an unrecognized header format), ship the validated draft rather than an
+    # empty brief, and log loudly. This is the backstop for the 2026-10-01 empty-brief failure.
+    assembled = ensure_sections(brief_md)
+    if _real_bullets(brief_md) > 0 and _real_bullets(assembled) == 0:
+        print("  [assemble] WARNING: section assembly dropped all content (header format not "
+              "recognized); shipping the validated draft as-is instead of an empty brief")
+    else:
+        brief_md = assembled
     for extra in (
         congress.render_section(),
         history_data.render_section(today.date()),
@@ -444,5 +481,36 @@ def build_brief():
     return out_path
 
 
+def _selftest():
+    """Offline checks for header parsing and the empty-brief guard (no API, no network)."""
+    # _header_name recognizes bold and ATX headers, rejects bullets and links.
+    assert _header_name("**US**") == "US"
+    assert _header_name("## US") == "US"
+    assert _header_name("### Saudi Arabia") == "Saudi Arabia"
+    assert _header_name("## **Iran**") == "Iran"
+    assert _header_name("- On Monday, Trump [said](https://x.com/a/1) ...") is None
+    assert _header_name("* a bullet") is None
+    assert _header_name("Just a sentence of prose.") is None
+
+    # ensure_sections keeps content under ATX headers (the 2026-10-01 regression).
+    atx = ("**Some updates on the Iran war (10/1):**\n"
+           "## US\n- On Wednesday, Trump [said](https://x.com/a/1) the U.S. could strike Iran.\n"
+           "## Iran\n- On Wednesday, Pezeshkian [warned](https://x.com/b/2) against escalation.")
+    out = ensure_sections(atx)
+    assert "could strike Iran" in out and "against escalation" in out, out
+    assert _real_bullets(out) == 2, _real_bullets(out)
+
+    # _real_bullets ignores the placeholder.
+    assert _real_bullets("**US**\n- Nothing to Report.\n**Iran**\n- Nothing to Report.") == 0
+
+    # An all-placeholder assembly from a content-bearing draft is the failure signature.
+    empty = ensure_sections("**title**\nUS\n- a real bullet [x](https://x.com/a/1)")
+    assert _real_bullets(empty) == 0 and _real_bullets("- a real bullet [x](u)") == 1
+    print("digest.py self-test passed")
+
+
 if __name__ == "__main__":
-    build_brief()
+    if len(sys.argv) > 1 and sys.argv[1] == "--selftest":
+        _selftest()
+    else:
+        build_brief()
