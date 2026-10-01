@@ -29,6 +29,7 @@ prints the path for you to open and send yourself.
 
 import os
 import json
+import re
 import smtplib
 import sqlite3
 import sys
@@ -86,6 +87,28 @@ def _is_override_run():
     """True for a manual test run whose recipients were overridden (ALLOW_RESEND=1): it always
     sends and is exempt from the guard, so it never blocks or is blocked by the scheduled send."""
     return os.environ.get("ALLOW_RESEND", "") not in ("", "0", "false", "False")
+
+
+# Appended tail sections (see digest.build_brief) always carry bullets, so the content check
+# must stop before them or it would call even an all-"Nothing to Report." news brief substantive.
+_TAIL_HEADERS = ("dates ahead", "this day in history", "u.s. congress", "us congress", "congress")
+
+
+def _brief_has_content(md):
+    """True if the NEWS body (the country/General sections, before the Dates-ahead / history /
+    Congress tail) has at least one real bullet. This is what decides whether a send counts as
+    'delivered': an empty brief (the 2026-10-01 failure) must NOT mark the day delivered, so a
+    corrected run can still go out, while a real brief does mark it and blocks duplicates."""
+    for line in md.splitlines():
+        s = line.strip()
+        header = re.sub(r"^#{1,6}\s+", "", s)
+        if header.startswith("**") and header.endswith("**"):
+            header = header.strip("*").strip()
+        if header.lower() in _TAIL_HEADERS:
+            break   # reached the appended tail; stop before its always-present bullets
+        if re.match(r"^[-*]\s+", s) and "nothing to report" not in s.lower():
+            return True
+    return False
 
 
 def latest_html():
@@ -149,6 +172,15 @@ def deliver(html_path=None, subject=None):
     recipients = _recipients()
     subject = subject or f"[DRAFT] Iran War Update ({datetime.now(timezone.utc).strftime('%m/%d')})"
 
+    # Does this brief actually have news? We read the sibling Markdown (cleaner to parse than the
+    # rendered HTML); if it is missing, assume substantive so a normal brief is never re-sent in a
+    # loop. Only a substantive send marks the day delivered (see below).
+    substantive = True
+    try:
+        substantive = _brief_has_content(html_path.with_suffix(".md").read_text(encoding="utf-8"))
+    except Exception:
+        substantive = True
+
     # Once-per-day guard: skip a real send if today's brief already went out, unless this is a
     # manual override/resend run. (Local mode below is not a send, so it is never guarded.)
     override = _is_override_run()
@@ -170,7 +202,7 @@ def deliver(html_path=None, subject=None):
             token = _graph_token(ms_tenant, ms_client, ms_secret)
             _create_outlook_draft(html, subject, recipients, ms_mailbox, token)
             print(f"Draft created in Outlook mailbox {ms_mailbox} via Microsoft Graph")
-            if not override:
+            if not override and substantive:
                 _mark_delivered(today)
             return
         except Exception as e:
@@ -191,7 +223,7 @@ def deliver(html_path=None, subject=None):
             s.login(gmail_user, gmail_pass)
             s.send_message(msg)
         print(f"Draft emailed to {', '.join(recipients)} via Gmail ({gmail_user})")
-        if not override:
+        if not override and substantive:
             _mark_delivered(today)
         return
 
@@ -205,7 +237,7 @@ def deliver(html_path=None, subject=None):
             s.login(smtp_user, smtp_pass)
             s.send_message(msg)
         print(f"Draft emailed to {', '.join(recipients)} via {smtp_host}")
-        if not override:
+        if not override and substantive:
             _mark_delivered(today)
         return
 
@@ -239,6 +271,20 @@ def _selftest():
         os.environ.pop("ALLOW_RESEND", None)
     finally:
         collect.DB_PATH = orig_db
+
+    # Content detection: a real news bullet counts; an all-"Nothing to Report." brief does not,
+    # even though the appended "Dates ahead" tail carries bullets.
+    real = ("**Some updates on the Iran war (10/1):**\n"
+            "**US**\n- On Wednesday, Trump [said](https://x.com/a/1) the U.S. could strike Iran.\n"
+            "**Iran**\n- Nothing to Report.\n\n"
+            "**Dates ahead**\n- 10/7: Anniversary of the 2023 Hamas attack on Israel.")
+    empty = ("**Some updates on the Iran war (10/1):**\n"
+             "**US**\n- Nothing to Report.\n**Iran**\n- Nothing to Report.\n"
+             "**General**\n- Nothing to Report.\n\n"
+             "**Dates ahead**\n- 10/7: Anniversary of the 2023 Hamas attack on Israel.\n"
+             "- 11/4: Anniversary of the 1979 seizure of the U.S. embassy in Tehran.")
+    assert _brief_has_content(real), "real brief should count as substantive"
+    assert not _brief_has_content(empty), "empty brief (only Dates-ahead bullets) must not count"
     print("deliver.py self-test passed")
 
 
