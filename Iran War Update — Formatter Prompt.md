@@ -112,6 +112,11 @@ Output ONLY the finished brief in Markdown, starting with the line:
 **Some updates on the Iran war (M/D):**
 ```
 
+Write every section header as **bold text on its own line** (`**US**`, `**Iran**`, ...), not
+with Markdown `#`/`##` heading syntax. The pipeline parses bold (and, defensively, `##`)
+headers to assemble the sections; a header in an unexpected format would drop that section's
+items.
+
 Use the date the user gives you. No preamble, and no commentary after the brief.
 
 ## Validation (enforced after drafting)
