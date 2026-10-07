@@ -55,9 +55,18 @@ brief's own date. Many are duplicate reports of the same event from different ou
      not sprout thin one- or two-line country sections. The four essential headers (US, Iran,
      Lebanon, Israel) always appear regardless of bullet count.
 4. **Write** each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
-   - Put the source hyperlink on the reporting verb, Markdown style: `[said](url)`.
-   - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
-     use "claim" to imply doubt.
+   - Put the hyperlink on the bullet's **main verb** — the verb naming what happened
+     (`arrested`, `struck`, `launched`, `announced`, `said`), Markdown style:
+     `police [arrested](url) a suspect`. Never hang the link on a trailing attribution, and
+     never end a bullet with "..., Al Jazeera reported" or "..., according to Reuters": the
+     hyperlink already carries the source, so the outlet name is redundant.
+   - **Do not name the reporting outlet in the text.** The only exception is a genuine exclusive
+     or scoop that originates with one outlet and is not matched elsewhere — there the outlet is
+     itself part of the news, so name it and link its reporting verb, e.g.
+     `Axios [reported](url) exclusively that ...`. A routine wire or multi-outlet story names no
+     outlet.
+   - Neutral verbs only when attributing a statement: said, reported, wrote, announced, told,
+     confirmed, warned. Never use "claim" to imply doubt.
    - **Depth is what makes the brief valuable — err toward more detail, not less.** Each item
      may include a `summary` carrying the article's or post's actual text. For every
      significant development, add an indented sub-bullet for **each** distinct piece of

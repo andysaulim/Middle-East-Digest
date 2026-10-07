@@ -182,9 +182,18 @@ Produce the day's brief. Steps:
    sections. The four essential headers (US, Iran, Lebanon, Israel) are exempt — they always
    appear regardless of how many bullets they carry.
 4. WRITE each item as one bullet: "On [Weekday], [actor] [verb] [what happened]."
-   - Put the source hyperlink on the reporting verb, Markdown style: [said](url).
-   - Neutral verbs only: said, reported, wrote, announced, told, confirmed, warned. Never
-     use "claim" to imply doubt.
+   - Put the Markdown hyperlink on the bullet's MAIN verb — the verb naming what happened
+     (arrested, struck, launched, seized, announced, said, warned), e.g. "police
+     [arrested](url) a suspect". NEVER hang the link on a trailing attribution, and never end a
+     bullet with "..., Al Jazeera reported" or "..., according to Reuters": the hyperlink itself
+     carries the source, so the outlet name is redundant.
+   - Do NOT name the reporting outlet in the text. The ONE exception is a genuine exclusive or
+     scoop that originates with a single outlet and is not matched elsewhere — there the outlet
+     is itself part of the news, so name it and put the link on its reporting verb, e.g. "Axios
+     [reported](url) exclusively that ...". A routine wire item or a multi-outlet story names no
+     outlet at all.
+   - Neutral verbs only when attributing a statement: said, reported, wrote, announced, told,
+     confirmed, warned. Never use "claim" to imply doubt.
    - DEPTH — this is what makes the brief valuable, so err toward MORE detail, not less.
      Each item may include a "summary" carrying the article's or post's actual text. For every
      significant development, add an indented sub-bullet for EACH distinct piece of substance
