@@ -963,6 +963,16 @@ def collect():
     con.close()
     print(f"Archived {new} new items to {DB_PATH}")
 
+    # Prune stale caches/summaries and VACUUM so the committed archive.db stays well under
+    # GitHub's 100 MB file limit. This MUST run every pipeline run: without it the DB grew
+    # unbounded until the push was rejected (file > 100 MB), which also failed the run AFTER the
+    # email went out, so the once-per-day `delivered` marker never persisted and every daily
+    # trigger re-sent the brief. Best-effort: a prune failure must not drop the run.
+    try:
+        prune_archive()
+    except Exception as e:
+        print(f"  [prune] skipped ({e!r})")
+
     out_path = DATA_DIR / f"items_{date_str}.json"
     out_path.write_text(json.dumps(deduped, indent=2, ensure_ascii=False),
                         encoding="utf-8")
