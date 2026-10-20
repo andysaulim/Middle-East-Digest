@@ -820,6 +820,42 @@ def from_gdelt(query, days=1, retries=3):
 
 # --- Archive --------------------------------------------------------------
 
+# The archive is committed to git, and GitHub rejects any file over 100 MB. On 2026-10-20 it
+# crossed that line, the "Commit archive" push failed, and the delivery guard stored in the DB
+# was lost (three sends that day). The caches below are only ever read back for recent items,
+# so old rows are dead weight; old item summaries are not read by anything (the weekly rollup
+# and cross-day dedupe use url/title/date), so they are cleared but the rows are kept.
+CACHE_RETENTION_DAYS = 14
+SUMMARY_RETENTION_DAYS = 30
+ARCHIVE_WARN_BYTES = 90 * 1024 * 1024
+
+
+def prune_archive(today=None):
+    """Drop stale cache rows and old summaries, then VACUUM. Run before committing the archive."""
+    today = today or datetime.now(_ET).date()
+    cache_cut = (today - timedelta(days=CACHE_RETENTION_DAYS)).strftime("%Y-%m-%d")
+    summary_cut = (today - timedelta(days=SUMMARY_RETENTION_DAYS)).strftime("%Y-%m-%d")
+    before = os.path.getsize(DB_PATH)
+    con = sqlite3.connect(DB_PATH)
+    tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    recent = "SELECT url FROM items WHERE collected_date >= ?"
+    if "fulltext" in tables:
+        con.execute(f"DELETE FROM fulltext WHERE url NOT IN ({recent})", (cache_cut,))
+    if "url_cache" in tables:
+        con.execute(f"DELETE FROM url_cache WHERE resolved_url NOT IN ({recent})", (cache_cut,))
+    con.execute("UPDATE items SET summary = NULL WHERE collected_date < ? AND summary IS NOT NULL",
+                (summary_cut,))
+    con.commit()
+    con.execute("VACUUM")
+    con.close()
+    after = os.path.getsize(DB_PATH)
+    print(f"Pruned archive: {before / 1e6:.1f} MB -> {after / 1e6:.1f} MB")
+    if after > ARCHIVE_WARN_BYTES:
+        print(f"::warning::archive.db is {after / 1e6:.1f} MB, near GitHub's 100 MB file limit; "
+              "the archive push will start failing soon.")
+    return after
+
+
 def init_db():
     con = sqlite3.connect(DB_PATH)
     con.execute("""
@@ -1015,5 +1051,7 @@ if __name__ == "__main__":
     import sys
     if "--selftest" in sys.argv:
         _selftest()
+    elif "--prune" in sys.argv:
+        prune_archive()
     else:
         collect()

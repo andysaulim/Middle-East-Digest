@@ -66,6 +66,20 @@ jobs:
       - name: Cost recording is wired
         run: python test_cost_recording.py
 
+      # Once-per-day delivery guard, persisted through the Actions cache instead of the archive
+      # push. deliver.py writes pipeline/state/delivered.txt after a real send; the cache is keyed
+      # by the brief's ET date, so a later slot the same day restores it and skips the send even
+      # if an earlier run's "Commit archive" push failed (the 2026-10-20 triple send).
+      - name: Brief date (ET)
+        run: echo "BRIEF_DATE=$(TZ=America/New_York date +%F)" >> "$GITHUB_ENV"
+
+      - name: Restore delivery guard
+        id: guard
+        uses: actions/cache/restore@v4
+        with:
+          path: pipeline/state
+          key: delivered-${{ env.BRIEF_DATE }}
+
       - name: Run pipeline
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -115,6 +129,14 @@ jobs:
           fi
           python run.py
 
+      # Right after the pipeline and before the archive commit, so a failed push can't lose it.
+      - name: Save delivery guard
+        if: always() && steps.guard.outputs.cache-hit != 'true' && hashFiles('pipeline/state/delivered.txt') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: pipeline/state
+          key: delivered-${{ env.BRIEF_DATE }}
+
       - name: Upload brief
         if: always()
         uses: actions/upload-artifact@v4
@@ -128,6 +150,8 @@ jobs:
       - name: Commit archive
         if: always()
         run: |
+          # Keep archive.db under GitHub's 100 MB file limit (stale caches, old summaries).
+          python collect.py --prune
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # metrics.jsonl carries the per-run token counts and API cost, one

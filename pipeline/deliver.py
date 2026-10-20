@@ -43,6 +43,9 @@ from pathlib import Path
 import collect  # reuse the archive DB path and the ET timezone
 
 OUT_DIR = Path(__file__).parent / "out"
+# Delivered-date marker, persisted across runs by the workflow's Actions cache (keyed by date)
+# rather than by the archive push. See the guard notes below.
+DELIVERED_MARKER = Path(__file__).parent / "state" / "delivered.txt"
 
 
 # --- Once-per-day delivery guard ---------------------------------------------
@@ -53,6 +56,12 @@ OUT_DIR = Path(__file__).parent / "out"
 # skips the send. A manual override run (ALLOW_RESEND=1, set by the workflow when a digest_to
 # recipient override is given, i.e. a test to yourself) always sends and never marks the day
 # delivered, so it neither is blocked by nor blocks the real scheduled send.
+#
+# The date is recorded in two places, and either one blocks a resend. The archive DB alone was
+# not enough: it only persists if the workflow's "Commit archive" push succeeds, and on
+# 2026-10-20 that push failed (archive.db had grown past GitHub's 100 MB file limit), so every
+# backup slot saw no record and the brief went out three times. DELIVERED_MARKER is a tiny file
+# the workflow saves to the Actions cache right after the pipeline, independent of the push.
 
 def _brief_date_str(now=None):
     """The brief's own date (America/New_York calendar day) as YYYY-MM-DD — the guard key."""
@@ -61,6 +70,11 @@ def _brief_date_str(now=None):
 
 
 def _delivered_today(date_str):
+    try:
+        if DELIVERED_MARKER.read_text(encoding="utf-8").strip() == date_str:
+            return True
+    except Exception:
+        pass
     try:
         con = sqlite3.connect(collect.DB_PATH)
         con.execute("CREATE TABLE IF NOT EXISTS delivered (date TEXT PRIMARY KEY)")
@@ -72,6 +86,11 @@ def _delivered_today(date_str):
 
 
 def _mark_delivered(date_str):
+    try:
+        DELIVERED_MARKER.parent.mkdir(parents=True, exist_ok=True)
+        DELIVERED_MARKER.write_text(date_str + "\n", encoding="utf-8")
+    except Exception:
+        pass
     try:
         con = sqlite3.connect(collect.DB_PATH)
         con.execute("CREATE TABLE IF NOT EXISTS delivered (date TEXT PRIMARY KEY)")
@@ -252,8 +271,10 @@ def deliver(html_path=None, subject=None):
 def _selftest():
     """Offline test of the once-per-day guard against a throwaway DB (no network, no send)."""
     import tempfile
-    orig_db = collect.DB_PATH
+    global DELIVERED_MARKER
+    orig_db, orig_marker = collect.DB_PATH, DELIVERED_MARKER
     collect.DB_PATH = tempfile.mktemp(suffix=".db")
+    DELIVERED_MARKER = Path(tempfile.mkdtemp()) / "state" / "delivered.txt"
     try:
         assert not _delivered_today("2026-08-27")
         _mark_delivered("2026-08-27")
@@ -261,6 +282,15 @@ def _selftest():
         # A newer day prunes the older row (the table holds only the latest delivered date).
         _mark_delivered("2026-08-28")
         assert _delivered_today("2026-08-28") and not _delivered_today("2026-08-27")
+        # Either record alone blocks a resend: the marker survives a lost archive push...
+        collect.DB_PATH = tempfile.mktemp(suffix=".db")
+        assert _delivered_today("2026-08-28"), "marker alone should block"
+        # ...and the DB row still blocks when the cache missed (no marker file).
+        DELIVERED_MARKER.unlink()
+        assert not _delivered_today("2026-08-28")
+        _mark_delivered("2026-08-28")
+        DELIVERED_MARKER.unlink()
+        assert _delivered_today("2026-08-28"), "DB row alone should block"
         # Override detection.
         for v in ("", "0", "false", "False"):
             os.environ["ALLOW_RESEND"] = v
@@ -270,7 +300,7 @@ def _selftest():
             assert _is_override_run(), v
         os.environ.pop("ALLOW_RESEND", None)
     finally:
-        collect.DB_PATH = orig_db
+        collect.DB_PATH, DELIVERED_MARKER = orig_db, orig_marker
 
     # Content detection: a real news bullet counts; an all-"Nothing to Report." brief does not,
     # even though the appended "Dates ahead" tail carries bullets.

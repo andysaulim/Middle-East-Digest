@@ -22,3 +22,6 @@ pipeline/data/items_*.json
 Thumbs.db
 .idea/
 .vscode/
+
+# Delivery-guard marker (persisted via the Actions cache, not git)
+pipeline/state/
