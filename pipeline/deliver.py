@@ -184,7 +184,7 @@ def _create_outlook_draft(html, subject, recipients, mailbox, token):
     urllib.request.urlopen(req, timeout=30).read()
 
 
-def deliver(html_path=None, subject=None):
+def deliver(html_path=None, subject=None, daily_guard=True):
     html_path = Path(html_path) if html_path else latest_html()
     html = html_path.read_text(encoding="utf-8")
 
@@ -202,9 +202,12 @@ def deliver(html_path=None, subject=None):
 
     # Once-per-day guard: skip a real send if today's brief already went out, unless this is a
     # manual override/resend run. (Local mode below is not a send, so it is never guarded.)
+    # daily_guard=False is for the Friday weekly rollup: it is a different email that runs after
+    # that day's brief has already marked the day delivered, so the guard would always skip it
+    # (it silently did, every Friday from 2026-08-28 to 2026-10-16). It neither checks nor marks.
     override = _is_override_run()
     today = _brief_date_str()
-    guard_on = recipients and not override
+    guard_on = recipients and not override and daily_guard
     if guard_on and _delivered_today(today):
         print(f"Already delivered the brief for {today}; skipping duplicate send "
               "(set ALLOW_RESEND=1 to force). No email sent.")
@@ -221,7 +224,7 @@ def deliver(html_path=None, subject=None):
             token = _graph_token(ms_tenant, ms_client, ms_secret)
             _create_outlook_draft(html, subject, recipients, ms_mailbox, token)
             print(f"Draft created in Outlook mailbox {ms_mailbox} via Microsoft Graph")
-            if not override and substantive:
+            if guard_on and substantive:
                 _mark_delivered(today)
             return
         except Exception as e:
@@ -242,7 +245,7 @@ def deliver(html_path=None, subject=None):
             s.login(gmail_user, gmail_pass)
             s.send_message(msg)
         print(f"Draft emailed to {', '.join(recipients)} via Gmail ({gmail_user})")
-        if not override and substantive:
+        if guard_on and substantive:
             _mark_delivered(today)
         return
 
@@ -256,7 +259,7 @@ def deliver(html_path=None, subject=None):
             s.login(smtp_user, smtp_pass)
             s.send_message(msg)
         print(f"Draft emailed to {', '.join(recipients)} via {smtp_host}")
-        if not override and substantive:
+        if guard_on and substantive:
             _mark_delivered(today)
         return
 
@@ -291,6 +294,37 @@ def _selftest():
         _mark_delivered("2026-08-28")
         DELIVERED_MARKER.unlink()
         assert _delivered_today("2026-08-28"), "DB row alone should block"
+        # With the day already delivered, the daily send is skipped but the weekly rollup
+        # (daily_guard=False) still goes out, and does not touch the guard. Fake SMTP, no network.
+        sent = []
+
+        class _FakeSMTP:
+            def __init__(self, *a, **k): pass
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def login(self, *a): pass
+            def send_message(self, msg): sent.append(msg["Subject"])
+
+        orig_smtp, smtplib.SMTP_SSL = smtplib.SMTP_SSL, _FakeSMTP
+        env = {"GMAIL_USER": "a@example.com", "GMAIL_APP_PASS": "x", "DIGEST_TO": "b@example.com"}
+        saved_env = {k: os.environ.get(k) for k in (*env, "ALLOW_RESEND")}
+        os.environ.update(env)
+        os.environ.pop("ALLOW_RESEND", None)
+        html = Path(tempfile.mkdtemp()) / "weekly.html"
+        html.write_text("<p>x</p>", encoding="utf-8")
+        try:
+            _mark_delivered(_brief_date_str())
+            deliver(html, subject="daily")
+            deliver(html, subject="weekly", daily_guard=False)
+            assert sent == ["weekly"], sent
+            assert DELIVERED_MARKER.read_text(encoding="utf-8").strip() == _brief_date_str()
+        finally:
+            smtplib.SMTP_SSL = orig_smtp
+            for k, v in saved_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
         # Override detection.
         for v in ("", "0", "false", "False"):
             os.environ["ALLOW_RESEND"] = v

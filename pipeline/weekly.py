@@ -149,7 +149,8 @@ def build_weekly():
     print(f"Wrote {out_path} ({len(review_md)} chars, {len(items)} items across the week)")
 
     html_path = render.render(out_path)
-    deliver.deliver(html_path, subject=f"[DRAFT] Iran War Update — Week in Review ({span_label})")
+    deliver.deliver(html_path, subject=f"[DRAFT] Iran War Update — Week in Review ({span_label})",
+                    daily_guard=False)
     return out_path
 
 
