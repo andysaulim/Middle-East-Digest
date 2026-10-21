@@ -67,8 +67,11 @@ brief's own date. Many are duplicate reports of the same event from different ou
      outlet.
    - Neutral verbs only when attributing a statement: said, reported, wrote, announced, told,
      confirmed, warned. Never use "claim" to imply doubt.
-   - **Depth is what makes the brief valuable — err toward more detail, not less.** Each item
-     may include a `summary` carrying the article's or post's actual text. For every
+   - **Depth is what makes the brief valuable — err toward more detail, not less. Do not stop
+     at the headline.** Each item's `summary` field carries the article's or post's actual body
+     text, not a blurb — mine it, don't restate the title. **Hard rule:** every significant item
+     needs at least **two or three** indented sub-bullets drawn from its summary; a one-line
+     bullet for an item whose summary has real content means substance was left unused. For every
      significant development, add an indented sub-bullet for **each** distinct piece of
      substance: each direct quote, each specific figure (counts, tolls, barrels, vessels,
      percentages, dates), each named condition or demand, and each material follow-on fact. A

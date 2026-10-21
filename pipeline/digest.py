@@ -195,10 +195,16 @@ Produce the day's brief. Steps:
    - Neutral verbs only when attributing a statement: said, reported, wrote, announced, told,
      confirmed, warned. Never use "claim" to imply doubt.
    - DEPTH — this is what makes the brief valuable, so err toward MORE detail, not less.
-     Each item may include a "summary" carrying the article's or post's actual text. For every
-     significant development, add an indented sub-bullet for EACH distinct piece of substance
-     in that text: each direct quote, each specific figure (counts, tolls, barrels, vessels,
-     percentages, dates), each named condition or demand, and each material follow-on fact.
+     DO NOT STOP AT THE HEADLINE. Each item's "summary" field carries the article's or post's
+     actual body text, not a blurb — your job is to MINE it, not restate the title. HARD RULE:
+     every significant item needs at least TWO to THREE indented sub-bullets drawn from its
+     summary; if you wrote a one-line bullet for an item whose summary has real content, you
+     have done this step wrong and left substance on the table. Before moving to the next item,
+     re-read its summary and ask what quote, number, or named detail you have not yet surfaced.
+     For every significant development, add an indented sub-bullet for EACH distinct piece of
+     substance in that text: each direct quote, each specific figure (counts, tolls, barrels,
+     vessels, percentages, dates), each named condition or demand, and each material follow-on
+     fact.
      A major development — a policy announcement, a senior official's remarks or press
      conference, a strike, a shipping-data release — often warrants FOUR TO EIGHT sub-bullets.
      Reproduce direct quotes VERBATIM and in full, in quotation marks; never paraphrase a
