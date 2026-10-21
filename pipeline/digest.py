@@ -42,8 +42,12 @@ DATA_DIR = Path(__file__).parent / "data"
 OUT_DIR = Path(__file__).parent / "out"
 OUT_DIR.mkdir(exist_ok=True)
 
-# Fast first attempt, stronger model on a validation-failure retry (Korea/Japan pattern).
-FAST_MODEL = os.environ.get("IRAN_BRIEF_MODEL", "claude-sonnet-5")
+# First-pass writer, then a retry on a validation failure (Korea/Japan pattern). The first pass
+# now defaults to Opus too: the fast model (claude-sonnet-5) wrote shallower, headline-level
+# briefs that only deepened when they happened to fail validation and escalate, so depth was
+# inconsistent day to day. Opus-first makes every brief the deeper write, at ~2x API cost per
+# run. Set IRAN_BRIEF_MODEL=claude-sonnet-5 to go back to the cheaper fast first pass.
+FAST_MODEL = os.environ.get("IRAN_BRIEF_MODEL", "claude-opus-4-8")
 PRIMARY_MODEL = os.environ.get("IRAN_BRIEF_PRIMARY_MODEL", "claude-opus-4-8")
 
 # Per-call token ledger, for metrics.jsonl and cost_report.py. The API's own
