@@ -282,3 +282,4 @@
 {"date": "2026-11-24", "run_at": "2026-11-24T18:03:29-05:00", "sent": true, "api_calls": 1, "input_tokens": 81412, "output_tokens": 5965, "cache_write_tokens": 0, "cache_read_tokens": 0, "est_cost_usd": 0.5562}
 {"date": "2026-11-24", "run_at": "2026-11-24T18:32:38-05:00", "sent": true, "api_calls": 1, "input_tokens": 79069, "output_tokens": 6882, "cache_write_tokens": 0, "cache_read_tokens": 0, "est_cost_usd": 0.5674}
 {"date": "2026-11-24", "run_at": "2026-11-24T18:56:40-05:00", "sent": true, "api_calls": 1, "input_tokens": 76854, "output_tokens": 6875, "cache_write_tokens": 0, "cache_read_tokens": 0, "est_cost_usd": 0.5561}
+{"date": "2026-11-25", "run_at": "2026-11-25T10:15:29-05:00", "sent": true, "api_calls": 1, "input_tokens": 107638, "output_tokens": 6984, "cache_write_tokens": 0, "cache_read_tokens": 0, "est_cost_usd": 0.7128}
